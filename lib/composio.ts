@@ -36,3 +36,28 @@ export function isToolKey(value: string): value is ToolKey {
 // Single shared entity for the Pleasure Pizza demo. In production this
 // would be the authenticated business owner (per-user connection scope).
 export const DEMO_ENTITY_ID = "pleasure-pizza-owner";
+
+// In-memory cache of toolkit slug → auth config ID. Resolved lazily on
+// first request and reused across calls. Reset on server restart.
+const authConfigIdCache = new Map<string, string>();
+
+// Find the first enabled, composio-managed auth config for a toolkit.
+// Throws if no auth config exists, with an actionable message — the fix
+// is to create one in the Composio dashboard or via the SDK.
+export async function getAuthConfigId(toolkitSlug: string): Promise<string> {
+  const cached = authConfigIdCache.get(toolkitSlug);
+  if (cached) return cached;
+
+  const composio = getComposio();
+  const page = await composio.authConfigs.list({ toolkit: toolkitSlug, limit: 10 });
+  const enabled = page.items.find(
+    (ac) => ac.status === "ENABLED" && (ac.isComposioManaged ?? true),
+  );
+  if (!enabled) {
+    throw new Error(
+      `No enabled auth config found for toolkit "${toolkitSlug}". Create one in the Composio dashboard (Settings → Auth Configs) or via composio.authConfigs.create('<slug>', { type: 'use_composio_managed_auth' }).`,
+    );
+  }
+  authConfigIdCache.set(toolkitSlug, enabled.id);
+  return enabled.id;
+}
