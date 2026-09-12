@@ -25,9 +25,9 @@ export const TOOL_DEFINITIONS = [
     description: 'Find the correct location phone number for order, allergy, payment, delivery, or staff-only issues.'
   },
   {
-    name: 'pleasure_pizza_demo_create_voice_agent',
+    name: 'pleasure_pizza_create_voice_agent',
     title: 'Create Customer Support Voice Agent',
-    description: 'Run the staged customer-support voice-agent setup and return the assigned phone number.'
+    description: 'Run the staged customer-support voice-agent demo flow and return the assigned phone number.'
   },
   {
     name: 'pleasure_pizza_demo_create_sms_agent',

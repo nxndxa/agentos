@@ -59,6 +59,7 @@ export function createPleasurePizzaMcpServer() {
       phoneNumber: z.string().optional(),
       e164: z.string().optional(),
       provider: z.string().optional(),
+      mode: z.string().optional(),
       simulated: z.boolean().optional(),
       disclosure: z.string().optional(),
       elapsedMs: z.number().optional(),
@@ -68,7 +69,7 @@ export function createPleasurePizzaMcpServer() {
     annotations: readAnnotations
   }, async (args, ctx) => askPleasurePizza(args, { onProgress: update => sendProgress(ctx, update) }));
 
-  server.registerTool('pleasure_pizza_demo_create_voice_agent', {
+  server.registerTool('pleasure_pizza_create_voice_agent', {
     title: 'Create a Customer Support Voice Agent',
     description: 'Run a staged customer-support voice-agent setup, emit user-facing progress updates, and return the assigned phone number +1 (385) 406-9108.',
     inputSchema: z.object({
@@ -83,6 +84,7 @@ export function createPleasurePizzaMcpServer() {
       useCase: z.string(),
       phoneNumber: z.string(),
       e164: z.string(),
+      mode: z.literal('demo'),
       elapsedMs: z.number(),
       progress: z.array(z.unknown()),
       confidence: z.string(),

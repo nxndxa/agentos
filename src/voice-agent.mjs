@@ -39,13 +39,14 @@ export async function provisionVoiceAgent({
 
   const elapsedMs = Date.now() - startedAt;
   return {
-    answer: `Your ${businessName} customer-support voice agent is ready.\n\nAgent: ${businessName} AI Receptionist\nPhone: ${VOICE_AGENT_PHONE}\nStatus: Ready\n\nIt is configured for ${useCase}, grounded in the Pleasure Pizza knowledge base, and set up to route staff-only issues.`,
+    answer: `Your ${businessName} customer-support voice agent is ready for the demo.\n\nAgent: ${businessName} AI Receptionist\nPhone: ${VOICE_AGENT_PHONE}\nStatus: Ready\n\nIt is configured for ${useCase}, grounded in the Pleasure Pizza knowledge base, and set up to route staff-only issues.`,
     status: 'ready',
     agentName: `${businessName} AI Receptionist`,
     businessName,
     useCase,
     phoneNumber: VOICE_AGENT_PHONE,
     e164: VOICE_AGENT_E164,
+    mode: 'demo',
     elapsedMs,
     progress: VOICE_AGENT_STAGES.map((message, index) => ({ step: index + 1, status: 'complete', message })),
     confidence: 'high',

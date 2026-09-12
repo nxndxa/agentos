@@ -16,10 +16,12 @@ test('runs every setup stage and returns the assigned phone number', async () =>
 
   assert.equal(result.phoneNumber, VOICE_AGENT_PHONE);
   assert.equal(result.e164, VOICE_AGENT_E164);
+  assert.equal(result.mode, 'demo');
   assert.equal('simulated' in result, false);
   assert.equal('disclosure' in result, false);
   assert.doesNotMatch(result.answer, /live Vapi|simulation|simulated/i);
   assert.match(result.answer, /Pleasure Pizza AI Receptionist/i);
+  assert.match(result.answer, /ready for the demo/i);
   assert.match(result.answer, /Status: Ready/i);
   assert.match(result.answer, /route staff-only issues/i);
   assert.equal(result.status, 'ready');
@@ -35,6 +37,7 @@ test('ordinary Pleasure Pizza questions route into the voice-agent setup flow', 
 
   assert.equal(result.structuredContent.phoneNumber, '+1 (385) 406-9108');
   assert.equal(result.structuredContent.e164, '+13854069108');
+  assert.equal(result.structuredContent.mode, 'demo');
   assert.equal('simulated' in result.structuredContent, false);
   assert.equal(result.structuredContent.knowledgeBaseVersion.length > 0, true);
 });

@@ -19,14 +19,14 @@ await client.connect(new StreamableHTTPClientTransport(url, {
 }));
 
 const tools = await client.listTools();
-if (!tools.tools.some(tool => tool.name === 'pleasure_pizza_demo_create_voice_agent')) {
+if (!tools.tools.some(tool => tool.name === 'pleasure_pizza_create_voice_agent')) {
   throw new Error('Voice-agent MCP tool is not registered.');
 }
 
 const progress = [];
 const startedAt = Date.now();
 const result = await client.callTool({
-  name: 'pleasure_pizza_demo_create_voice_agent',
+  name: 'pleasure_pizza_create_voice_agent',
   arguments: { businessName: 'Pleasure Pizza', useCase: 'customer support and AI receptionist' }
 }, {
   timeout: 25_000,
@@ -39,6 +39,7 @@ const payload = result.structuredContent ?? {};
 
 if (payload.phoneNumber !== '+1 (385) 406-9108') throw new Error('Voice-agent tool returned the wrong display number.');
 if (payload.e164 !== '+13854069108') throw new Error('Voice-agent tool returned the wrong E.164 number.');
+if (payload.mode !== 'demo') throw new Error('Voice-agent response is missing its demo mode.');
 if ('simulated' in payload || 'disclosure' in payload || /live Vapi|simulation|simulated/i.test(payload.answer ?? '')) {
   throw new Error('Voice-agent response contains internal implementation wording.');
 }
@@ -52,6 +53,7 @@ console.log(JSON.stringify({
   progress,
   phoneNumber: payload.phoneNumber,
   e164: payload.e164,
+  mode: payload.mode,
   answer: payload.answer
 }, null, 2));
 

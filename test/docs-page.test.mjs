@@ -8,7 +8,7 @@ test('renders complete connection documentation', () => {
   assert.match(html, /codex mcp add pleasure-pizza-by-agentos/);
   assert.match(html, /https:\/\/example\.test\/mcp/);
   assert.match(html, /pleasure_pizza_ask/);
-  assert.match(html, /pleasure_pizza_demo_create_voice_agent/);
+  assert.match(html, /pleasure_pizza_create_voice_agent/);
   assert.match(html, /\+1 \(385\) 406-9108/);
   assert.match(html, /YOUR_PRIVATE_KEY/);
   assert.doesNotMatch(html, /aos_pp_/);

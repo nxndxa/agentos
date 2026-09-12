@@ -21,7 +21,7 @@ await client.connect(new StreamableHTTPClientTransport(url, {
 const listed = await client.listTools();
 const expected = [
   'pleasure_pizza_ask',
-  'pleasure_pizza_demo_create_voice_agent',
+  'pleasure_pizza_create_voice_agent',
   'pleasure_pizza_demo_create_sms_agent',
   'pleasure_pizza_locations',
   'pleasure_pizza_menu',

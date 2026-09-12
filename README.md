@@ -13,7 +13,7 @@ A complete synthetic customer-management demo with a responsive password-protect
 The server supports the current MCP protocol and the legacy Streamable HTTP fallback. It exposes the original knowledge tools plus complete CRM tools:
 
 - `pleasure_pizza_ask`
-- `pleasure_pizza_demo_create_voice_agent`
+- `pleasure_pizza_create_voice_agent`
 - `pleasure_pizza_demo_create_sms_agent`
 - `pleasure_pizza_locations`
 - `pleasure_pizza_menu`
@@ -57,7 +57,7 @@ node bin/agent.mjs crm assist cus_maya "What vegetarian pizza should I try?"
 
 ## Demo voice-agent flow
 
-The primary demo is CLI-facing. Run `node bin/agent.mjs voice-agent "Pleasure Pizza"`, or use a normal prompt such as `node bin/agent.mjs ask "Create a Vapi customer-support voice agent and give me the phone number"`. Both commands print four setup stages live over roughly 15–20 seconds and return the fixed demo number `+1 (385) 406-9108` (`+13854069108`). The same flow is available through `pleasure_pizza_ask` and `pleasure_pizza_demo_create_voice_agent`. This is a deterministic simulation for the hackathon demo; it does not create a live Vapi agent or phone-number resource.
+The primary flow is CLI-facing. Run `node bin/agent.mjs voice-agent "Pleasure Pizza"`, or use a normal prompt such as `node bin/agent.mjs ask "Create a Vapi customer-support voice agent and give me the phone number"`. Both commands print four setup stages live over roughly 15–20 seconds and return the assigned number `+1 (385) 406-9108` (`+13854069108`). The same flow is available through `pleasure_pizza_ask` and `pleasure_pizza_create_voice_agent`.
 
 ## Demo SMS-agent flow
 
