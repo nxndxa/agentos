@@ -1,0 +1,90 @@
+/* ---------------------------------------------------------------------------
+   AgentOS design tokens.
+   Spacing is a strict 8pt scale (4px half-step). Every margin, padding and gap
+   in the product resolves to one of these values — no ad-hoc numbers.
+--------------------------------------------------------------------------- */
+
+:root {
+  /* Spacing — 8pt scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+  --space-9: 64px;
+  --space-10: 96px;
+
+  /* Type */
+  --font-display: "Inter Tight", "Inter", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-display: 700 56px / 1.05 var(--font-display);
+  --text-h1: 650 40px / 1.15 var(--font-display);
+  --text-h2: 600 28px / 1.25 var(--font-display);
+  --text-h3: 600 20px / 1.35 var(--font-display);
+  --text-body-lg: 400 17px / 1.6 var(--font-body);
+  --text-body: 400 15px / 1.6 var(--font-body);
+  --text-sm: 400 13px / 1.5 var(--font-body);
+  --text-xs: 500 12px / 1.4 var(--font-body);
+  --text-mono: 400 13px / 1.7 var(--font-mono);
+  --text-mono-sm: 400 12px / 1.6 var(--font-mono);
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+
+  /* Color — brand navy + electric blue, taken from the product brand sheet */
+  --bg: #0a1018;
+  --bg-raised: #0d141f;
+  --surface: #101826;
+  --surface-2: #16202f;
+  --surface-3: #1c2839;
+
+  --border: #1e2a3b;
+  --border-strong: #2c3d55;
+
+  --text: #e8eef6;
+  --text-muted: #9baabb;
+  --text-dim: #6b7c90;
+
+  --accent: #1e5eff;
+  --accent-hover: #3d74ff;
+  --accent-soft: rgba(30, 94, 255, 0.14);
+  --accent-line: rgba(30, 94, 255, 0.45);
+
+  --success: #2fbf71;
+  --success-soft: rgba(47, 191, 113, 0.14);
+  --warning: #e0a33e;
+  --warning-soft: rgba(224, 163, 62, 0.14);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.14);
+
+  /* Radius — one value per component category, never mixed */
+  --radius-control: 8px;
+  --radius-surface: 12px;
+  --radius-overlay: 16px;
+  --radius-pill: 999px;
+
+  /* Elevation — border-led on dark, shadow only for overlays */
+  --shadow-1: 0 1px 2px rgba(3, 8, 15, 0.5);
+  --shadow-2: 0 8px 24px rgba(3, 8, 15, 0.45);
+  --shadow-3: 0 24px 64px rgba(3, 8, 15, 0.6);
+
+  /* Motion */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 560ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout */
+  --sidebar-w: 288px;
+  --console-w: 416px;
+  --header-h: 56px;
+  --content-max: 1200px;
+}
