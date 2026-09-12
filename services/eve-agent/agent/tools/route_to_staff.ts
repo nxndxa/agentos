@@ -1,14 +1,13 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { callAgentOs } from "../lib/agentos.js";
+import { callDowntown } from "../lib/downtown.js";
 
 export default defineTool({
-  description: "Find the correct Pleasure Pizza location phone number for allergies, existing orders, payment, delivery, complaints, or staff-only issues.",
+  description: "Get the Pleasure Pizza Downtown phone number for allergies, existing orders, payment, delivery, complaints, missing downtown facts, or staff-only issues. Does not contact staff.",
   inputSchema: z.object({
     reason: z.string().min(1).describe("Why the customer needs restaurant staff."),
-    location: z.string().optional().describe("The location involved, if known."),
   }),
   async execute(input, ctx) {
-    return callAgentOs("escalate", input, { signal: ctx.abortSignal });
+    return callDowntown("escalate", input, { signal: ctx.abortSignal });
   },
 });

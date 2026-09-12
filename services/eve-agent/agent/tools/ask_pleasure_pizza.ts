@@ -1,14 +1,13 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { callAgentOs } from "../lib/agentos.js";
+import { callDowntown } from "../lib/downtown.js";
 
 export default defineTool({
-  description: "Answer a customer question using the live Pleasure Pizza knowledge base and its safety policies. Use this before stating business facts.",
+  description: "Answer a customer question about Pleasure Pizza Downtown only. Use this before stating business facts; unavailable downtown facts require staff confirmation.",
   inputSchema: z.object({
     question: z.string().min(1).describe("The customer's exact question."),
-    location: z.string().optional().describe("The Pleasure Pizza location, if the customer named one."),
   }),
   async execute(input, ctx) {
-    return callAgentOs("ask", input, { signal: ctx.abortSignal });
+    return callDowntown("ask", input, { signal: ctx.abortSignal });
   },
 });

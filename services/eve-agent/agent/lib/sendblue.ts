@@ -91,7 +91,7 @@ export function continuationToken(contactNumber: string, fromNumber: string): st
 }
 
 export function customerFacingText(content: string): string {
-  return content
+  const plain = content
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<think>[\s\S]*$/gi, "")
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)")
@@ -102,6 +102,16 @@ export function customerFacingText(content: string): string {
     .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  // Don't truncate an answer: that could drop an allergy warning or price caveat.
+  // If generation ignores the sentence budget, send a safe short fallback instead.
+  const sentences = plain.replace(/https?:\/\/\S+/g, "link")
+    .split(/[.!?]+["'”’)]*(?:\s+|$)/u)
+    .filter((sentence) => sentence.trim());
+  if (sentences.length > 3) {
+    return "i can't fit all the details into a quick text. please check with the pleasure pizza downtown team before relying on them.";
+  }
+  return plain.toLowerCase();
 }
 
 export async function sendBlueMessage(

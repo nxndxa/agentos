@@ -66,9 +66,9 @@ test("ignores outbound, non-iMessage, group, and wrong-line messages", () => {
 test("removes MiniMax reasoning blocks from customer-facing text", () => {
   assert.equal(
     customerFacingText("<think>Internal chain of thought.</think>\n\nCall us at 831-555-0100."),
-    "Call us at 831-555-0100.",
+    "call us at 831-555-0100.",
   );
-  assert.equal(customerFacingText("Answer only."), "Answer only.");
+  assert.equal(customerFacingText("Answer only."), "answer only.");
   assert.equal(customerFacingText("<think>unfinished reasoning"), "");
 });
 
@@ -86,15 +86,23 @@ test("sendBlueMessage uses the documented SendBlue request shape", async () => {
   assert.deepEqual(await request?.json(), {
     number: "+15550000000",
     from_number: "+13470000000",
-    content: "Hi!",
+    content: "hi!",
   });
 });
 
 test("renders recommendation and price formatting as plain iMessage text", () => {
   assert.equal(
     customerFacingText("## Try these\n- **The Hook** — pesto and feta\n- **BBQ Chicken** — chicken and BBQ sauce\n\nCall **831-475-4002**. Published price: **$39.00**."),
-    "Try these\nThe Hook — pesto and feta\nBBQ Chicken — chicken and BBQ sauce\n\nCall 831-475-4002. Published price: $39.00.",
+    "try these\nthe hook — pesto and feta\nbbq chicken — chicken and bbq sauce\n\ncall 831-475-4002. published price: $39.00.",
   );
   assert.equal(customerFacingText("See https://example.com/menu_for_today and call +1-831-475-4002."),
-    "See https://example.com/menu_for_today and call +1-831-475-4002.");
+    "see https://example.com/menu_for_today and call +1-831-475-4002.");
+});
+
+test("lowercases every reply and enforces the three-sentence delivery budget", () => {
+  assert.equal(customerFacingText("Hi! This Is DOWNTOWN. What's Up?"), "hi! this is downtown. what's up?");
+  assert.equal(customerFacingText("one. two. three. four."),
+    "i can't fit all the details into a quick text. please check with the pleasure pizza downtown team before relying on them.");
+  assert.equal(customerFacingText("It is $39.00. Call 831-600-7859. Please confirm first."),
+    "it is $39.00. call 831-600-7859. please confirm first.");
 });

@@ -22,13 +22,13 @@ Railway's official MCP was also registered in the operator's local Codex configu
    | Tool | Existing endpoint | Purpose |
    | --- | --- | --- |
    | `ask_pleasure_pizza` | `POST /api/ask` | Retrieve an answer from the restaurant knowledge service |
-   | `list_locations` | `POST /api/locations` | Look up location details |
+   | `list_locations` | `POST /api/locations` | Return only Downtown location details |
    | `search_menu` | `POST /api/menu` | Search published menu information |
-   | `route_to_staff` | `POST /api/escalate` | Return staff contact guidance; does not contact staff |
+   | `route_to_staff` | `POST /api/locations` | Return Downtown contact guidance; does not contact staff |
 
-5. On a completed assistant reply, the channel strips MiniMax `<think>` blocks and Markdown formatting, then posts plain text to SendBlue's `/api/send-message` endpoint. Text emitted alongside tool calls is not delivered. Failed turns attempt a short fallback reply.
+5. On a completed assistant reply, the channel strips MiniMax `<think>` blocks and Markdown formatting, lowercases the text, and checks a three-sentence maximum before posting to SendBlue's `/api/send-message` endpoint. Overlong replies use a short, safe fallback instead of truncation that could remove important cautions. Text emitted alongside tool calls is not delivered. Failed turns attempt a short fallback reply. This formatting applies to our agent's messages, not SendBlue's own verification notices.
 
-The prompt asks for natural, usually one- or two-sentence replies without canned introductions, unsolicited emoji, or lists. It requires location clarification where relevant and cautions against guaranteeing live prices, hours, order status, or allergen safety. Eve's default shell, file, web, and delegation tools are explicitly disabled. This service exposes no CRM editing tools.
+The conversation is fixed to Downtown Santa Cruz and never asks customers to select a location. Replies are natural, lowercase, usually one or two sentences and always at most three, without canned introductions, unsolicited emoji, or lists. Tools have no model-selectable location argument; the adapter forces Downtown and rejects results mentioning other branches. The shared menu endpoint currently returns Pleasure Point baselines even with a Downtown filter, so those results are withheld and the agent offers Downtown staff confirmation instead. A Downtown-specific menu source is still needed for reliable menu pricing. The prompt also cautions against guaranteeing live prices, hours, order status, or allergen safety. Eve's default shell, file, web, and delegation tools are explicitly disabled. This service exposes no CRM editing tools.
 
 ## Configuration and local use
 
@@ -75,7 +75,7 @@ An initial deploy failed with `EXDEV` when Eve tried to rename an uploaded local
 
 ## Verification and remaining limits
 
-The implementation passed seven helper tests, TypeScript checking, and an Eve production build. A local Eve invocation using the configured MiniMax credentials successfully retrieved a restaurant phone number through the live knowledge service. Railway health probes passed, an unsigned webhook returned 401, and a signed ignored event returned 200. The signed SendBlue receive webhook was registered and read back successfully.
+The implementation passed eleven helper tests, TypeScript checking, and an Eve production build. A local Eve invocation using the configured MiniMax credentials successfully retrieved a restaurant phone number through the live knowledge service. Railway health probes passed, an unsigned webhook returned 401, and a signed ignored event returned 200. The signed SendBlue receive webhook was registered and read back successfully.
 
 A real inbound-to-outbound iMessage exchange was verified after registering the owner's test number and completing SendBlue contact verification. SendBlue reported the agent's replies as delivered over iMessage, and the owner confirmed receipt. A restaurant lookup through the deployed webhook also produced a delivered phone-number answer. SendBlue shared lines require the sender to be a verified contact. Attachments and group conversations are not supported. The inbound service allowlist does not itself enforce SendBlue's outbound SMS fallback policy.
 
