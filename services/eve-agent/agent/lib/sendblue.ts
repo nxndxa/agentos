@@ -103,14 +103,8 @@ export function customerFacingText(content: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Don't truncate an answer: that could drop an allergy warning or price caveat.
-  // If generation ignores the sentence budget, send a safe short fallback instead.
-  const sentences = plain.replace(/https?:\/\/\S+/g, "link")
-    .split(/[.!?]+["'”’)]*(?:\s+|$)/u)
-    .filter((sentence) => sentence.trim());
-  if (sentences.length > 3) {
-    return "i can't fit all the details into a quick text. please check with the pleasure pizza downtown team before relying on them.";
-  }
+  // Length is controlled by the prompt. Preserve useful facts and safety caveats
+  // rather than discarding the answer in favor of a generic contact-staff message.
   return plain.toLowerCase();
 }
 

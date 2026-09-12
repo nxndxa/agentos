@@ -99,10 +99,10 @@ test("renders recommendation and price formatting as plain iMessage text", () =>
     "see https://example.com/menu_for_today and call +1-831-475-4002.");
 });
 
-test("lowercases every reply and enforces the three-sentence delivery budget", () => {
+test("lowercases replies without replacing useful summaries with a staff referral", () => {
   assert.equal(customerFacingText("Hi! This Is DOWNTOWN. What's Up?"), "hi! this is downtown. what's up?");
-  assert.equal(customerFacingText("one. two. three. four."),
-    "i can't fit all the details into a quick text. please check with the pleasure pizza downtown team before relying on them.");
+  assert.equal(customerFacingText("Pizza comes whole or by the slice. There's BBQ Chicken. There's Veggie too. Prices can change."),
+    "pizza comes whole or by the slice. there's bbq chicken. there's veggie too. prices can change.");
   assert.equal(customerFacingText("It is $39.00. Call 831-600-7859. Please confirm first."),
     "it is $39.00. call 831-600-7859. please confirm first.");
 });

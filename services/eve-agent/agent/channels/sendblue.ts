@@ -83,7 +83,7 @@ export default defineChannel<SendBlueState, { state: SendBlueState }>({
     async "turn.failed"(_event, channel) {
       await sendBlueMessage(
         channel.state.contactNumber,
-        "Sorry—I hit a temporary issue. Please try again, or call your Pleasure Pizza location for immediate help.",
+        "sorry, i hit a temporary issue getting that answer. could you send your question again?",
         { fromNumber: channel.state.fromNumber },
       );
     },

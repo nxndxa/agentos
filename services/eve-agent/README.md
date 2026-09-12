@@ -17,18 +17,18 @@ Railway's official MCP was also registered in the operator's local Codex configu
 1. SendBlue posts to `POST /webhooks/sendblue`. The service compares the `sb-signing-secret` header with the configured secret using a constant-time comparison.
 2. The channel accepts nonempty, received, direct messages for the configured sending line and allowed service. The default allowed service is `iMessage`; outbound events and group messages are ignored.
 3. The sending line and customer number form the conversation address. Eve resumes that conversation or creates one, and queues new messages when a turn is active.
-4. MiniMax chooses from four restaurant tools. Each sends authenticated JSON to the existing AgentOS service:
+4. MiniMax chooses from four restaurant tools. Knowledge and location lookups send authenticated JSON to AgentOS; menu summaries use a source-attributed Downtown snapshot:
 
    | Tool | Existing endpoint | Purpose |
    | --- | --- | --- |
    | `ask_pleasure_pizza` | `POST /api/ask` | Retrieve an answer from the restaurant knowledge service |
    | `list_locations` | `POST /api/locations` | Return only Downtown location details |
-   | `search_menu` | `POST /api/menu` | Search published menu information |
+   | `search_menu` | Published Downtown ordering-menu snapshot | Summarize categories, representative pizzas, sizes, and selected slice prices |
    | `route_to_staff` | `POST /api/locations` | Return Downtown contact guidance; does not contact staff |
 
-5. On a completed assistant reply, the channel strips MiniMax `<think>` blocks and Markdown formatting, lowercases the text, and checks a three-sentence maximum before posting to SendBlue's `/api/send-message` endpoint. Overlong replies use a short, safe fallback instead of truncation that could remove important cautions. Text emitted alongside tool calls is not delivered. Failed turns attempt a short fallback reply. This formatting applies to our agent's messages, not SendBlue's own verification notices.
+5. On a completed assistant reply, the channel strips MiniMax `<think>` blocks and Markdown formatting and lowercases the text before posting to SendBlue's `/api/send-message` endpoint. The prompt requests three or four short sentences, with shorter replies for simple questions. Length is prompt-controlled, not a hard sentence gate: useful answers and safety cautions are no longer replaced with a generic contact-staff fallback. Text emitted alongside tool calls is not delivered. Failed turns ask the customer to retry. This formatting applies to our agent's messages, not SendBlue's own verification notices.
 
-The conversation is fixed to Downtown Santa Cruz and never asks customers to select a location. Replies are natural, lowercase, usually one or two sentences and always at most three, without canned introductions, unsolicited emoji, or lists. Tools have no model-selectable location argument; the adapter forces Downtown and rejects results mentioning other branches. The shared menu endpoint currently returns Pleasure Point baselines even with a Downtown filter, so those results are withheld and the agent offers Downtown staff confirmation instead. A Downtown-specific menu source is still needed for reliable menu pricing. The prompt also cautions against guaranteeing live prices, hours, order status, or allergen safety. Eve's default shell, file, web, and delegation tools are explicitly disabled. This service exposes no CRM editing tools.
+The conversation is fixed to Downtown Santa Cruz and never asks customers to select a location. Replies are natural, lowercase summaries without canned introductions, unsolicited emoji, or lists. Tools have no model-selectable location argument; the adapter forces Downtown and replaces cross-location passages with useful Downtown context. The shared menu endpoint returns Pleasure Point baselines even with a Downtown filter, so menu questions instead use the partial Downtown ordering-menu snapshot in `agent/lib/downtown-menu.ts`, checked on September 12, 2026. Refresh it as the published menu changes; it is not live stock, whole-pizza pricing, or a custom-order quote. The agent answers known portions of questions and briefly states specific unknowns instead of telling customers to contact the business. Phone numbers are provided when requested. Allergy answers retain ingredient uncertainty and cross-contact cautions without claiming safety. Eve's default shell, file, web, and delegation tools are explicitly disabled. This service exposes no CRM editing tools.
 
 ## Configuration and local use
 
@@ -75,7 +75,7 @@ An initial deploy failed with `EXDEV` when Eve tried to rename an uploaded local
 
 ## Verification and remaining limits
 
-The implementation passed eleven helper tests, TypeScript checking, and an Eve production build. A local Eve invocation using the configured MiniMax credentials successfully retrieved a restaurant phone number through the live knowledge service. Railway health probes passed, an unsigned webhook returned 401, and a signed ignored event returned 200. The signed SendBlue receive webhook was registered and read back successfully.
+The implementation passed twelve helper tests, TypeScript checking, and an Eve production build. Local MiniMax checks cover menu summaries, missing custom prices, and allergy uncertainty. Railway health probes passed, an unsigned webhook returned 401, and a signed ignored event returned 200. The signed SendBlue receive webhook was registered and read back successfully.
 
 A real inbound-to-outbound iMessage exchange was verified after registering the owner's test number and completing SendBlue contact verification. SendBlue reported the agent's replies as delivered over iMessage, and the owner confirmed receipt. A restaurant lookup through the deployed webhook also produced a delivered phone-number answer. SendBlue shared lines require the sender to be a verified contact. Attachments and group conversations are not supported. The inbound service allowlist does not itself enforce SendBlue's outbound SMS fallback policy.
 

@@ -1,4 +1,5 @@
 import { callAgentOs, type AgentOsTool } from "./agentos.ts";
+import { downtownMenu } from "./downtown-menu.ts";
 
 type CallOptions = Parameters<typeof callAgentOs>[2];
 
@@ -11,6 +12,10 @@ export async function callDowntown(
   input: Record<string, unknown>,
   options: CallOptions = {},
 ): Promise<Record<string, unknown>> {
+  // Use the verified Downtown source instead of discarding every menu question
+  // because the legacy menu endpoint only returns Pleasure Point prices.
+  if (tool === "menu") return { menu: downtownMenu, requiresLiveVerification: true };
+
   if (tool === "locations" || tool === "escalate") {
     const result = await callAgentOs("locations", { location: "downtown" }, options);
     const locations = Array.isArray(result.locations)
@@ -20,14 +25,16 @@ export async function callDowntown(
     return {
       location: locations[0],
       requiresLiveVerification: true,
-      ...(tool === "escalate" ? { guidance: "Ask the customer to call this downtown number; no staff have been contacted." } : {}),
+      ...(tool === "escalate" ? { guidance: "Use these facts to answer directly. Do not suggest contacting staff; no staff have been contacted. Provide the phone number only if the customer asks for it." } : {}),
     };
   }
 
   const result = await callAgentOs(tool, { ...input, location: "downtown" }, options);
   if (otherLocation.test(JSON.stringify(result))) {
     return {
-      answer: "This lookup did not confirm downtown-specific information. Do not quote it or substitute another branch's menu or prices. Use the downtown staff-routing tool for confirmation.",
+      answer: "The retrieved passage was not downtown-specific. Answer using the available downtown context below; if a requested fact is missing, state that specific uncertainty briefly. Do not redirect the customer to the business.",
+      downtown: await callDowntown("locations", {}, options),
+      menu: downtownMenu,
       requiresLiveVerification: true,
     };
   }
