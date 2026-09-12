@@ -40,13 +40,26 @@ const SERVICE_COLOR: Record<ToolKey, string> = {
 };
 
 // Numerical masses used to derive node radii via the force-graph convention
-// radius = nodeRelSize * sqrt(val / Math.PI). With nodeRelSize=6:
-//   brain:   val=50  -> r ≈ 24
-//   service: val=12  -> r ≈ 12
-//   entity:  val=3   -> r ≈ 6
+// radius = nodeRelSize * sqrt(val / Math.PI). With nodeRelSize=4:
+//   brain:   val=30  -> r ≈ 12
+//   service: val=8   -> r ≈ 6
+//   entity:  val=3   -> r ≈ 4
 // Hidden nodes (not in revealedNodeIds) get val=0 → zero radius → invisible.
-const NODE_VAL = { brain: 50, service: 12, entity: 3 };
-const NODE_REL_SIZE = 6;
+const NODE_VAL = { brain: 30, service: 8, entity: 3 };
+const NODE_REL_SIZE = 4;
+
+// Mix a hex color with white by `amount` (0 = original, 1 = pure white).
+// Used to give each node a softer highlight at the top-left of its gradient.
+const lightenHex = (hex: string, amount: number): string => {
+  const m = hex.replace("#", "");
+  if (m.length !== 6) return hex;
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  const lerp = (c: number) => Math.round(c + (255 - c) * amount);
+  const toHex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${toHex(lerp(r))}${toHex(lerp(g))}${toHex(lerp(b))}`;
+};
 const BRAIN_ID = "brain";
 const AQUA = "#72f5df";
 const LINK_COLOR_HIDDEN = "rgba(0,0,0,0)";
@@ -619,6 +632,98 @@ export default function Home() {
 
   const nodeRelSize = NODE_REL_SIZE;
 
+  // Service icon glyphs that get rendered inside service nodes.
+  const serviceIconFor: Record<ToolKey, string> = {
+    gmail: "M",
+    drive: "◆",
+    docs: "D",
+    sheets: "#",
+    calendar: "▣",
+  };
+
+  // Custom node drawing — gradient-filled circles, glow halo on the brain,
+  // service-icon glyphs inside service nodes, smooth scale-up on hover.
+  const nodeCanvasObject = useCallback(
+    (raw: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D) => {
+      const node = raw as GraphNode;
+      if (node.val === 0 || node.x === undefined || node.y === undefined) return;
+      const baseRadius = nodeRelSize * Math.sqrt(node.val / Math.PI);
+      const isHovered = hoveredNodeId === node.id;
+      const dimmed = !!hoverNeighbors && !hoverNeighbors.has(node.id);
+      const r = baseRadius * (isHovered ? 1.18 : 1);
+      ctx.save();
+
+      if (dimmed) ctx.globalAlpha = 0.22;
+
+      // Brain gets an extra soft halo so it reads as the focal point.
+      if (node.kind === "brain") {
+        const halo = ctx.createRadialGradient(node.x, node.y, r * 0.6, node.x, node.y, r * 2.1);
+        halo.addColorStop(0, "rgba(114,245,223,0.55)");
+        halo.addColorStop(0.6, "rgba(114,245,223,0.18)");
+        halo.addColorStop(1, "rgba(114,245,223,0)");
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 2.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Radial gradient body — brighter at the top-left, deeper at the bottom-right.
+      const grad = ctx.createRadialGradient(
+        node.x - r * 0.35,
+        node.y - r * 0.35,
+        r * 0.15,
+        node.x,
+        node.y,
+        r,
+      );
+      grad.addColorStop(0, lightenHex(node.color, 0.35));
+      grad.addColorStop(1, node.color);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Soft outer ring on services + brain for a "premium" feel.
+      if (node.kind !== "entity") {
+        ctx.strokeStyle = isHovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)";
+        ctx.lineWidth = isHovered ? 1.6 : 1;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 1.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Glyph inside the node — service icon or brain spark.
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (node.kind === "brain") {
+        ctx.font = `600 ${Math.round(r * 0.85)}px ui-sans-serif, system-ui`;
+        ctx.fillText("✦", node.x, node.y + 1);
+      } else if (node.kind === "service" && node.tool) {
+        ctx.font = `800 ${Math.round(r * 0.7)}px ui-monospace, monospace`;
+        ctx.fillText(serviceIconFor[node.tool], node.x, node.y + 1);
+      }
+
+      ctx.restore();
+    },
+    [hoveredNodeId, hoverNeighbors, nodeRelSize],
+  );
+
+  // We replace the default rendering, so we also have to provide a
+  // pointer-area paint function so click + hover detection still works.
+  const nodePointerAreaPaint = useCallback(
+    (raw: NodeObject<GraphNode>, color: string, ctx: CanvasRenderingContext2D) => {
+      const node = raw as GraphNode;
+      if (node.val === 0 || node.x === undefined || node.y === undefined) return;
+      const r = nodeRelSize * Math.sqrt(node.val / Math.PI);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 2, 0, Math.PI * 2);
+      ctx.fill();
+    },
+    [nodeRelSize],
+  );
+
   const linkColor = useCallback(
     (raw: LinkObject<GraphNode, GraphLink>) => {
       const link = raw as GraphLink;
@@ -701,6 +806,9 @@ export default function Home() {
             nodeRelSize={nodeRelSize}
             nodeVal={(n) => (n as GraphNode).val}
             nodeColor={nodeColor}
+            nodeCanvasObject={nodeCanvasObject}
+            nodeCanvasObjectMode={() => "replace"}
+            nodePointerAreaPaint={nodePointerAreaPaint}
             nodeLabel={(n) => {
               const node = n as GraphNode;
               if (node.val === 0) return "";
@@ -712,10 +820,10 @@ export default function Home() {
             linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
             linkDirectionalParticleWidth={linkDirectionalParticleWidth}
             linkDirectionalParticleColor={linkDirectionalParticleColor}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
-            cooldownTicks={120}
-            warmupTicks={40}
+            d3AlphaDecay={0.025}
+            d3VelocityDecay={0.4}
+            cooldownTicks={100}
+            warmupTicks={30}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
             onBackgroundClick={handleBackgroundClick}
