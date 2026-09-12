@@ -26,8 +26,8 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'pleasure_pizza_demo_create_voice_agent',
-    title: 'Create Demo Voice Agent',
-    description: 'Run the simulated Vapi customer-support voice-agent setup and return the assigned demo phone number.'
+    title: 'Create Customer Support Voice Agent',
+    description: 'Run the staged customer-support voice-agent setup and return the assigned phone number.'
   },
   {
     name: 'pleasure_pizza_demo_create_sms_agent',

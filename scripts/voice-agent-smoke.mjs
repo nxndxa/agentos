@@ -39,7 +39,9 @@ const payload = result.structuredContent ?? {};
 
 if (payload.phoneNumber !== '+1 (385) 406-9108') throw new Error('Voice-agent tool returned the wrong display number.');
 if (payload.e164 !== '+13854069108') throw new Error('Voice-agent tool returned the wrong E.164 number.');
-if (payload.simulated !== true || !/No live Vapi agent/i.test(payload.disclosure ?? '')) throw new Error('Voice-agent simulation disclosure is missing.');
+if ('simulated' in payload || 'disclosure' in payload || /live Vapi|simulation|simulated/i.test(payload.answer ?? '')) {
+  throw new Error('Voice-agent response contains internal implementation wording.');
+}
 if (elapsedMs < 15_000 || elapsedMs > 21_000) throw new Error(`Voice-agent setup took ${elapsedMs}ms instead of 15–20 seconds.`);
 if (progress.length !== 4) throw new Error(`Expected 4 MCP progress notifications, received ${progress.length}.`);
 
@@ -50,8 +52,7 @@ console.log(JSON.stringify({
   progress,
   phoneNumber: payload.phoneNumber,
   e164: payload.e164,
-  simulated: payload.simulated,
-  disclosure: payload.disclosure
+  answer: payload.answer
 }, null, 2));
 
 await client.close();

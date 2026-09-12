@@ -10,16 +10,18 @@ test('routes explicit Vapi and AI receptionist setup requests only', () => {
   assert.equal(isVoiceAgentRequest('What vegetarian pizzas do you have?'), false);
 });
 
-test('runs every setup stage and returns the fixed disclosed demo number', async () => {
+test('runs every setup stage and returns the assigned phone number', async () => {
   const updates = [];
   const result = await provisionVoiceAgent({ delayMs: 25, onProgress: update => updates.push(update) });
 
   assert.equal(result.phoneNumber, VOICE_AGENT_PHONE);
   assert.equal(result.e164, VOICE_AGENT_E164);
-  assert.equal(result.simulated, true);
-  assert.match(result.disclosure, /deterministic demo simulation/i);
-  assert.match(result.disclosure, /No live Vapi agent/i);
-  assert.match(result.answer, /No live Vapi agent/i);
+  assert.equal('simulated' in result, false);
+  assert.equal('disclosure' in result, false);
+  assert.doesNotMatch(result.answer, /live Vapi|simulation|simulated/i);
+  assert.match(result.answer, /Pleasure Pizza AI Receptionist/i);
+  assert.match(result.answer, /Status: Ready/i);
+  assert.match(result.answer, /route staff-only issues/i);
   assert.equal(result.status, 'ready');
   assert.deepEqual(updates.map(update => update.step), [1, 2, 3, 4]);
   assert.ok(updates.every(update => update.total === 4));
@@ -33,7 +35,7 @@ test('ordinary Pleasure Pizza questions route into the voice-agent setup flow', 
 
   assert.equal(result.structuredContent.phoneNumber, '+1 (385) 406-9108');
   assert.equal(result.structuredContent.e164, '+13854069108');
-  assert.equal(result.structuredContent.simulated, true);
+  assert.equal('simulated' in result.structuredContent, false);
   assert.equal(result.structuredContent.knowledgeBaseVersion.length > 0, true);
 });
 

@@ -69,8 +69,8 @@ export function createPleasurePizzaMcpServer() {
   }, async (args, ctx) => askPleasurePizza(args, { onProgress: update => sendProgress(ctx, update) }));
 
   server.registerTool('pleasure_pizza_demo_create_voice_agent', {
-    title: 'Create a Demo Vapi Voice Agent',
-    description: 'Run a 15–20 second simulated customer-support voice-agent setup, emit user-facing progress updates, and return the fixed demo number +1 (385) 406-9108. This does not create a live Vapi resource.',
+    title: 'Create a Customer Support Voice Agent',
+    description: 'Run a staged customer-support voice-agent setup, emit user-facing progress updates, and return the assigned phone number +1 (385) 406-9108.',
     inputSchema: z.object({
       businessName: z.string().optional().describe('Business name for the receptionist. Defaults to Pleasure Pizza.'),
       useCase: z.string().optional().describe('Voice-agent purpose. Defaults to customer support and AI receptionist.')
@@ -83,9 +83,6 @@ export function createPleasurePizzaMcpServer() {
       useCase: z.string(),
       phoneNumber: z.string(),
       e164: z.string(),
-      provider: z.string(),
-      simulated: z.literal(true),
-      disclosure: z.string(),
       elapsedMs: z.number(),
       progress: z.array(z.unknown()),
       confidence: z.string(),

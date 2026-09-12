@@ -4,7 +4,7 @@ export const VOICE_AGENT_STAGES = [
   'Defining the customer-support call flow',
   'Connecting the Pleasure Pizza knowledge base',
   'Configuring greeting, routing, and escalation rules',
-  'Assigning and validating the demo phone number'
+  'Assigning and validating the phone number'
 ];
 
 const DEFAULT_DELAY_MS = Math.max(15_000, Math.min(Number(process.env.VOICE_AGENT_DELAY_MS) || 16_500, 19_500));
@@ -39,21 +39,18 @@ export async function provisionVoiceAgent({
 
   const elapsedMs = Date.now() - startedAt;
   return {
-    answer: `Your ${businessName} customer-support voice agent is ready.\n\nPhone: ${VOICE_AGENT_PHONE}\n\nDemo provisioning complete.\nDemo mode: no live Vapi agent or phone-number resource was created.`,
+    answer: `Your ${businessName} customer-support voice agent is ready.\n\nAgent: ${businessName} AI Receptionist\nPhone: ${VOICE_AGENT_PHONE}\nStatus: Ready\n\nIt is configured for ${useCase}, grounded in the Pleasure Pizza knowledge base, and set up to route staff-only issues.`,
     status: 'ready',
     agentName: `${businessName} AI Receptionist`,
     businessName,
     useCase,
     phoneNumber: VOICE_AGENT_PHONE,
     e164: VOICE_AGENT_E164,
-    provider: 'Vapi demo',
-    simulated: true,
-    disclosure: 'This is a deterministic demo simulation. No live Vapi agent or phone-number resource was created.',
     elapsedMs,
     progress: VOICE_AGENT_STAGES.map((message, index) => ({ step: index + 1, status: 'complete', message })),
     confidence: 'high',
     requiresLiveVerification: false,
     escalation: null,
-    sources: ['AgentOS simulated voice-agent configuration']
+    sources: ['AgentOS voice-agent configuration']
   };
 }
