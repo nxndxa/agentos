@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import dynamic from "next/dynamic";
+import type { ForceGraphMethods, GraphData, NodeObject, LinkObject } from "react-force-graph-2d";
 import Particles, { ParticlesProvider } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import Vapi from "@vapi-ai/web";
-import { Check, ChevronRight, Mic, Phone, PhoneOff, Plus, Sparkles } from "lucide-react";
-import { seedData, type SeedEntity, type ToolKey as SeedToolKey } from "@/lib/seed-data";
+import { ChevronRight, Mic, Phone, PhoneOff, Plus, Sparkles } from "lucide-react";
+import { seedData, type ToolKey as SeedToolKey } from "@/lib/seed-data";
+
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
 type Mode = "idle" | "listening" | "thinking" | "speaking";
 type TranscriptEntry = { id: string; role: "agent" | "user"; text: string };
@@ -25,18 +27,53 @@ const TOOLKIT_SLUG_TO_KEY: Record<string, ToolKey> = {
   googlecalendar: "calendar",
 };
 
-const iconFor: Record<ToolKey, string> = { gmail: "M", drive: "◆", docs: "D", sheets: "#", calendar: "▣" };
-const iconClassFor: Record<ToolKey, string> = { gmail: "mail", drive: "drive", docs: "docs", sheets: "sheets", calendar: "calendar" };
 const labelFor: Record<ToolKey, string> = { gmail: "Gmail", drive: "Drive", docs: "Docs", sheets: "Sheets", calendar: "Calendar" };
 const VapiConstructor = ((Vapi as unknown as { default?: typeof Vapi }).default ?? Vapi) as unknown as new (publicKey: string) => Vapi;
-const brainNode: Node = { id: "brain", type: "brain", position: { x: 450, y: 330 }, data: { label: "AgentOS", detail: "Business brain" } };
-const toolCatalog: Record<ToolKey, Node> = {
-  gmail: { id: "gmail", type: "service", position: { x: 70, y: 70 }, data: { label: "Gmail", icon: "M", color: "red" } },
-  drive: { id: "drive", type: "service", position: { x: 760, y: 70 }, data: { label: "Drive", icon: "◆", color: "blue" } },
-  docs: { id: "docs", type: "service", position: { x: 70, y: 430 }, data: { label: "Docs", icon: "D", color: "violet" } },
-  sheets: { id: "sheets", type: "service", position: { x: 760, y: 430 }, data: { label: "Sheets", icon: "#", color: "green" } },
-  calendar: { id: "calendar", type: "service", position: { x: 430, y: 620 }, data: { label: "Calendar", icon: "▣", color: "orange" } },
+
+// Per-service color tokens — match the existing radial layout in seed-data.ts.
+const SERVICE_COLOR: Record<ToolKey, string> = {
+  gmail: "#df5b57",
+  drive: "#347bea",
+  docs: "#8a4dd1",
+  sheets: "#37aa85",
+  calendar: "#e07a3a",
 };
+
+// Numerical masses used to derive node radii via the force-graph convention
+// radius = nodeRelSize * sqrt(val / Math.PI). With nodeRelSize=6:
+//   brain:   val=50  -> r ≈ 24
+//   service: val=12  -> r ≈ 12
+//   entity:  val=3   -> r ≈ 6
+// Hidden nodes (not in revealedNodeIds) get val=0 → zero radius → invisible.
+const NODE_VAL = { brain: 50, service: 12, entity: 3 };
+const NODE_REL_SIZE = 6;
+const BRAIN_ID = "brain";
+const AQUA = "#72f5df";
+const LINK_COLOR_HIDDEN = "rgba(0,0,0,0)";
+const LINK_COLOR = "rgba(49,152,255,0.55)";
+const DIMMED_COLOR = "rgba(150,165,170,0.18)";
+
+type GraphNode = {
+  id: string;
+  kind: "brain" | "service" | "entity";
+  label: string;
+  tool?: ToolKey;
+  meta?: string;
+  icon?: string;
+  color: string;
+  val: number;
+  x?: number;
+  y?: number;
+  fx?: number;
+  fy?: number;
+};
+
+type GraphLink = {
+  source: string;
+  target: string;
+  revealed: boolean;
+};
+
 const detectTools = (text: string): ToolKey[] => {
   const lower = text.toLowerCase();
   return (TOOL_KEYS as readonly ToolKey[]).filter((tool) => {
@@ -51,119 +88,12 @@ const detectTools = (text: string): ToolKey[] => {
   });
 };
 
-const buildEntityNodes = (tool: ToolKey): Node[] => {
-  const service = toolCatalog[tool];
-  const brain = brainNode.position;
-  const seeds = seedData[tool];
-  const dx = service.position.x - brain.x;
-  const dy = service.position.y - brain.y;
-  const len = Math.sqrt(dx * dx + dy * dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
-  const px = -uy;
-  const py = ux;
-  return seeds.map((entity: SeedEntity, i: number) => {
-    const tier = Math.floor(i / 2);
-    const side = i % 2 === 0 ? -1 : 1;
-    const distance = 115 + tier * 78;
-    const lateral = side * (45 + tier * 22);
-    return {
-      id: `${tool}-${entity.id}`,
-      type: "entity",
-      position: {
-        x: Math.round(service.position.x + ux * distance + px * lateral),
-        y: Math.round(service.position.y + uy * distance + py * lateral),
-      },
-      data: {
-        label: entity.label,
-        kind: entity.kind,
-        source: tool,
-        meta: entity.meta,
-        color: service.data.color,
-      },
-    } as Node;
-  });
-};
-
-function ServiceNode({ data }: { data: { label: string; icon: string; color: string } }) {
-  return (
-    <div className={`graph-node service-node service-${data.color}`}>
-      <Handle type="target" position={Position.Top} id="t-top" />
-      <Handle type="target" position={Position.Left} id="t-left" />
-      <Handle type="target" position={Position.Right} id="t-right" />
-      <Handle type="target" position={Position.Bottom} id="t-bot" />
-      <span className={`service-icon ${data.color}`}>{data.icon}</span>
-      <span>{data.label}</span>
-      <Handle type="source" position={Position.Top} id="s-top" />
-      <Handle type="source" position={Position.Left} id="s-left" />
-      <Handle type="source" position={Position.Right} id="s-right" />
-      <Handle type="source" position={Position.Bottom} id="s-bot" />
-    </div>
-  );
-}
-function EntityNode({ data }: { data: { label: string; kind: string; source: string; meta?: string; color: string } }) {
-  return (
-    <div className={`graph-node entity-node entity-${data.color}`}>
-      <Handle type="source" position={Position.Top} id="e-top" />
-      <Handle type="source" position={Position.Left} id="e-left" />
-      <Handle type="source" position={Position.Right} id="e-right" />
-      <Handle type="source" position={Position.Bottom} id="e-bot" />
-      <span className="entity-kind">{data.kind}</span>
-      <strong>{data.label}</strong>
-      {data.meta && <span className="entity-meta">{data.meta}</span>}
-    </div>
-  );
-}
-function BrainNode({ data }: { data: { label: string; detail: string } }) {
-  return (
-    <div className="brain-node">
-      <Handle type="target" position={Position.Top} id="b-top" />
-      <Handle type="target" position={Position.Left} id="b-left" />
-      <Handle type="target" position={Position.Right} id="b-right" />
-      <Handle type="target" position={Position.Bottom} id="b-bot" />
-      <div className="brain-core"><span className="brain-spark">✦</span></div>
-      <strong>{data.label}</strong>
-      <span>{data.detail}</span>
-      <Handle type="source" position={Position.Top} id="bs-top" />
-      <Handle type="source" position={Position.Left} id="bs-left" />
-      <Handle type="source" position={Position.Right} id="bs-right" />
-      <Handle type="source" position={Position.Bottom} id="bs-bot" />
-    </div>
-  );
-}
-function BrainRingNode({ data }: { data: { circumference: number; dashoffset: number; isPulsing: boolean } }) {
-  return (
-    <div className={`brain-ring ${data.isPulsing ? "is-pulsing" : ""}`}>
-      <svg viewBox="0 0 160 160" width="160" height="160" aria-hidden>
-        <circle className="ring-track" cx="80" cy="80" r="70" />
-        <circle
-          className="ring-progress"
-          cx="80"
-          cy="80"
-          r="70"
-          strokeDasharray={data.circumference}
-          strokeDashoffset={data.dashoffset}
-        />
-      </svg>
-    </div>
-  );
-}
-function CheckIcon({ filled, pending }: { filled: boolean; pending: boolean }) {
-  return (
-    <span className={`check-icon ${filled ? "is-filled" : ""} ${pending ? "is-pending" : ""}`} aria-hidden>
-      <Check size={14} strokeWidth={filled ? 3 : 1.5} />
-    </span>
-  );
-}
-const nodeTypes = { service: ServiceNode, entity: EntityNode, brain: BrainNode, brainRing: BrainRingNode };
-
-function HomeInner() {
+export default function Home() {
   const [mode, setMode] = useState<Mode>("idle");
   const [callActive, setCallActive] = useState(false);
   const [connected, setConnected] = useState(false);
   const [onboardingTools, setOnboardingTools] = useState<ToolKey[]>([]);
-  const [revealedNodeIds, setRevealedNodeIds] = useState<Set<string>>(new Set(["brain", "brain-ring"]));
-  const [burstingServices, setBurstingServices] = useState<Set<string>>(new Set());
+  const [revealedNodeIds, setRevealedNodeIds] = useState<Set<string>>(new Set([BRAIN_ID]));
   const [transcript, setTranscript] = useState("Hi! How can I connect your business with our platform?");
   const [transcriptLog, setTranscriptLog] = useState<TranscriptEntry[]>([
     { id: "welcome", role: "agent", text: "Hi! How can I connect your business with our platform?" },
@@ -173,17 +103,20 @@ function HomeInner() {
   const [oauthComplete, setOauthComplete] = useState(false);
   const [connectBusy, setConnectBusy] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<{ id: string; x: number; y: number } | null>(null);
   const greetedRef = useRef(false);
   const vapiRef = useRef<Vapi | null>(null);
   const transcriptLogRef = useRef<HTMLDivElement | null>(null);
   const revealTimeoutsRef = useRef<number[]>([]);
   const onboardingToolsRef = useRef<ToolKey[]>([]);
-  const fitViewCalledRef = useRef(false);
   const oauthCompleteRef = useRef(false);
   const oauthInProgressRef = useRef(false);
   const populateEntitiesRef = useRef(false);
   const accountsRef = useRef<AccountState[]>([]);
-  const reactFlow = useReactFlow();
+  const graphContainerRef = useRef<HTMLDivElement | null>(null);
+  const [graphSize, setGraphSize] = useState<{ width: number; height: number }>({ width: 800, height: 600 });
+  const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined);
   useEffect(() => {
     onboardingToolsRef.current = onboardingTools;
   }, [onboardingTools]);
@@ -193,9 +126,6 @@ function HomeInner() {
   useEffect(() => () => {
     revealTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
   }, []);
-  // React Flow fires a benign ResizeObserver warning in dev mode when
-  // the canvas resizes during a frame. Silence it so the error overlay
-  // doesn't trip.
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       if (event.message?.includes("ResizeObserver loop completed with undelivered notifications")) {
@@ -206,6 +136,23 @@ function HomeInner() {
     window.addEventListener("error", onError);
     return () => window.removeEventListener("error", onError);
   }, []);
+
+  // Track the canvas size so ForceGraph2D knows how big to render.
+  useEffect(() => {
+    const node = graphContainerRef.current;
+    if (!node) return;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      setGraphSize({ width, height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [connected]);
+
   const addTranscript = useCallback((role: TranscriptEntry["role"], text: string) => {
     if (!text.trim()) return;
     setTranscriptLog((entries) => {
@@ -220,18 +167,6 @@ function HomeInner() {
     const panel = transcriptLogRef.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
   }, [transcriptLog]);
-  useEffect(() => {
-    if (!connected) {
-      fitViewCalledRef.current = false;
-      return;
-    }
-    if (fitViewCalledRef.current) return;
-    fitViewCalledRef.current = true;
-    const id = window.requestAnimationFrame(() => {
-      reactFlow.fitView({ padding: 0.22, maxZoom: 1, minZoom: 0.4 });
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [connected, reactFlow]);
   useEffect(() => {
     if (greetedRef.current) return;
     if (process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY && process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID) return;
@@ -253,15 +188,11 @@ function HomeInner() {
     return () => { window.clearTimeout(timer); window.speechSynthesis?.cancel(); };
   }, []);
 
-  // Optional signal from the OAuth callback page. The polling loop in
-  // startConnect is the source of truth, so we don't act on it — we just
-  // short-circuit the next status poll so the UI feels snappier.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const data = event.data as { type?: string } | null;
       if (!data || typeof data !== "object") return;
       if (data.type !== "composio-callback") return;
-      // No-op: the popup.closed poll will trigger the status check.
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
@@ -309,7 +240,7 @@ function HomeInner() {
     const finalDelay = entityStart + tools.length * 160 + totalEntities * 170 + 350;
     const finalId = window.setTimeout(() => {
       setMode("speaking");
-      setTranscript(`I connected ${tools.map((t) => toolCatalog[t].data.label).join(", ")}. Pulled recent activity from each — your business brain is ready to grow.`);
+      setTranscript(`I connected ${tools.map((t) => labelFor[t]).join(", ")}. Pulled recent activity from each — your business brain is ready to grow.`);
       setStatus("Business graph ready");
     }, finalDelay);
     revealTimeoutsRef.current.push(finalId);
@@ -457,32 +388,14 @@ function HomeInner() {
     const serviceStart = 250;
     const serviceStep = 520;
     newlyAdded.forEach((tool, i) => {
-      const id = toolCatalog[tool].id;
+      const id = tool;
       const timeoutId = window.setTimeout(() => {
         revealNode(id);
-        setBurstingServices((prev) => {
-          if (prev.has(tool)) return prev;
-          const next = new Set(prev);
-          next.add(tool);
-          return next;
-        });
-        const burstId = window.setTimeout(() => {
-          setBurstingServices((prev) => {
-            if (!prev.has(tool)) return prev;
-            const next = new Set(prev);
-            next.delete(tool);
-            return next;
-          });
-        }, 600);
-        revealTimeoutsRef.current.push(burstId);
-        setStatus(`${toolCatalog[tool].data.label} connected · mapping capability`);
+        setStatus(`${labelFor[tool]} connected · mapping capability`);
       }, serviceStart + i * serviceStep);
       revealTimeoutsRef.current.push(timeoutId);
     });
 
-    // Always reveal entities from the hard-coded Pleasure Pizza seed
-    // data — no OAuth gate. Real Composio data will replace these once
-    // the Connect flow finishes, but the demo works without it.
     const entityStart = serviceStart + newlyAdded.length * serviceStep + 200;
     newlyAdded.forEach((tool, serviceIndex) => {
       const seeds = seedData[tool];
@@ -500,7 +413,7 @@ function HomeInner() {
     const finalId = window.setTimeout(() => {
       setMode("speaking");
       setTranscript(
-        `I mapped ${merged.map((t) => toolCatalog[t].data.label).join(", ")}. Pleasure Pizza's brain has ${totalEntities} known touchpoints and is ready to grow.`,
+        `I mapped ${merged.map((t) => labelFor[t]).join(", ")}. Pleasure Pizza's brain has ${totalEntities} known touchpoints and is ready to grow.`,
       );
       setStatus("Business graph ready");
     }, finalDelay);
@@ -602,6 +515,8 @@ function HomeInner() {
     () => 1 + onboardingTools.length + onboardingTools.reduce((sum, t) => sum + seedData[t].length, 0),
     [onboardingTools],
   );
+
+  // Progress text — replaces the visual brain-ring progress indicator.
   let nonBrainRevealed = 0;
   let revealedServicesCount = 0;
   for (const tool of onboardingTools) {
@@ -613,71 +528,213 @@ function HomeInner() {
       if (revealedNodeIds.has(`${tool}-${seed.id}`)) nonBrainRevealed++;
     }
   }
-  const ringProgress = totalPossible > 1 ? Math.min(1, Math.max(0, nonBrainRevealed / (totalPossible - 1))) : 0;
-  const ringCircumference = 2 * Math.PI * 70;
-  const ringDashoffset = ringCircumference * (1 - ringProgress);
-  const ringIsPulsing = ringProgress > 0 && ringProgress < 1;
-  const activeGraphNodes = useMemo(
-    () => [
-      brainNode,
-      {
-        id: "brain-ring",
-        type: "brainRing",
-        position: { x: brainNode.position.x - 34, y: brainNode.position.y - 34 },
-        data: { circumference: ringCircumference, dashoffset: ringDashoffset, isPulsing: ringIsPulsing },
-        style: { pointerEvents: "none", zIndex: -1, opacity: ringProgress > 0 ? 1 : 0, transition: "opacity .6s ease" },
-      } as Node,
-      ...onboardingTools.flatMap((tool) => [toolCatalog[tool], ...buildEntityNodes(tool)]),
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onboardingTools, revealedNodeIds.size, ringProgress, ringDashoffset, ringIsPulsing],
-  );
-  const visibleNodes = activeGraphNodes.filter((node) => revealedNodeIds.has(node.id));
-  const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
-  const visibleEdges: Edge[] = [];
-  onboardingTools.forEach((tool) => {
-    if (!visibleNodeIds.has(tool)) return;
-    const isBursting = burstingServices.has(tool);
-    const stroke = isBursting ? "#ffffff" : "#3198ff";
-    visibleEdges.push({
-      id: `edge-${tool}-brain`,
-      source: tool,
-      target: "brain",
-      animated: true,
-      style: { stroke, strokeWidth: isBursting ? 1.9 : 1.2, opacity: isBursting ? 1 : 0.72, transition: "stroke .55s ease, stroke-width .55s ease, opacity .55s ease" },
-      markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 12, height: 12 },
+
+  // ---- Build the graph data --------------------------------------------------
+  const graphData = useMemo<{ nodes: GraphNode[]; links: GraphLink[] }>(() => {
+    const nodes: GraphNode[] = [];
+    const links: GraphLink[] = [];
+
+    nodes.push({
+      id: BRAIN_ID,
+      kind: "brain",
+      label: "AgentOS",
+      meta: "Business brain",
+      color: AQUA,
+      val: NODE_VAL.brain,
+      // Pin the brain to the canvas center so it always reads as the focal point.
+      fx: 0,
+      fy: 0,
     });
-  });
-  onboardingTools.forEach((tool) => {
-    const seeds = seedData[tool];
-    seeds.forEach((seed) => {
-      const entityId = `${tool}-${seed.id}`;
-      if (!visibleNodeIds.has(entityId) || !visibleNodeIds.has(tool)) return;
-      visibleEdges.push({
-        id: `edge-${entityId}-${tool}`,
-        source: entityId,
-        target: tool,
-        animated: true,
-        style: { stroke: "#3198ff", strokeWidth: 0.9, opacity: 0.45 },
+
+    for (const tool of onboardingTools) {
+      const serviceRevealed = revealedNodeIds.has(tool);
+      nodes.push({
+        id: tool,
+        kind: "service",
+        label: labelFor[tool],
+        tool,
+        color: SERVICE_COLOR[tool],
+        val: serviceRevealed ? NODE_VAL.service : 0,
       });
-    });
-  });
+      links.push({
+        source: tool,
+        target: BRAIN_ID,
+        revealed: serviceRevealed,
+      });
+
+      for (const seed of seedData[tool]) {
+        const entityId = `${tool}-${seed.id}`;
+        const entityRevealed = revealedNodeIds.has(entityId);
+        nodes.push({
+          id: entityId,
+          kind: "entity",
+          label: seed.label,
+          tool,
+          meta: seed.meta,
+          color: SERVICE_COLOR[tool],
+          val: entityRevealed ? NODE_VAL.entity : 0,
+        });
+        links.push({
+          source: entityId,
+          target: tool,
+          revealed: serviceRevealed && entityRevealed,
+        });
+      }
+    }
+    return { nodes, links };
+    // Re-build on every reveal so force-graph diffs and re-heats the sim.
+  }, [onboardingTools, revealedNodeIds]);
+
+  // 1-hop neighbor set for the hovered node.
+  const hoverNeighbors = useMemo(() => {
+    if (!hoveredNodeId) return null;
+    const set = new Set<string>([hoveredNodeId]);
+    for (const link of graphData.links) {
+      const sourceId = typeof link.source === "string" ? link.source : (link.source as { id?: string })?.id ?? "";
+      const targetId = typeof link.target === "string" ? link.target : (link.target as { id?: string })?.id ?? "";
+      if (sourceId === hoveredNodeId) set.add(targetId);
+      if (targetId === hoveredNodeId) set.add(sourceId);
+    }
+    return set;
+  }, [hoveredNodeId, graphData.links]);
+
+  const nodeById = useMemo(() => {
+    const map = new Map<string, GraphNode>();
+    for (const n of graphData.nodes) map.set(n.id, n);
+    return map;
+  }, [graphData.nodes]);
+
+  const selectedNodeData = selectedNode ? nodeById.get(selectedNode.id) ?? null : null;
+
+  // ---- Force-graph prop callbacks -------------------------------------------
+  const nodeColor = useCallback(
+    (raw: NodeObject<GraphNode>) => {
+      const node = raw as GraphNode;
+      if (node.val === 0) return "rgba(0,0,0,0)";
+      if (!hoverNeighbors) return node.color;
+      return hoverNeighbors.has(node.id) ? node.color : DIMMED_COLOR;
+    },
+    [hoverNeighbors],
+  );
+
+  const nodeRelSize = NODE_REL_SIZE;
+
+  const linkColor = useCallback(
+    (raw: LinkObject<GraphNode, GraphLink>) => {
+      const link = raw as GraphLink;
+      if (!link.revealed) return LINK_COLOR_HIDDEN;
+      if (!hoverNeighbors) return LINK_COLOR;
+      const sourceId = typeof link.source === "string" ? link.source : (link.source as { id?: string })?.id ?? "";
+      const targetId = typeof link.target === "string" ? link.target : (link.target as { id?: string })?.id ?? "";
+      const inSet = hoverNeighbors.has(sourceId) || hoverNeighbors.has(targetId);
+      return inSet ? LINK_COLOR : "rgba(49,152,255,0.12)";
+    },
+    [hoverNeighbors],
+  );
+
+  const linkWidth = useCallback(
+    (raw: LinkObject<GraphNode, GraphLink>) => {
+      const link = raw as GraphLink;
+      if (!link.revealed) return 0;
+      if (!hoverNeighbors) return 1;
+      const sourceId = typeof link.source === "string" ? link.source : (link.source as { id?: string })?.id ?? "";
+      const targetId = typeof link.target === "string" ? link.target : (link.target as { id?: string })?.id ?? "";
+      const inSet = hoverNeighbors.has(sourceId) || hoverNeighbors.has(targetId);
+      return inSet ? 1.2 : 0.5;
+    },
+    [hoverNeighbors],
+  );
+
+  const linkDirectionalParticles = useCallback(
+    (raw: LinkObject<GraphNode, GraphLink>) => {
+      const link = raw as GraphLink;
+      if (!link.revealed) return 0;
+      // Slightly more particles on brain↔service links to highlight them.
+      return link.target === BRAIN_ID || link.source === BRAIN_ID ? 2 : 1;
+    },
+    [],
+  );
+
+  const linkDirectionalParticleSpeed = useCallback(() => 0.006, []);
+  const linkDirectionalParticleWidth = useCallback(() => 1.6, []);
+  const linkDirectionalParticleColor = useCallback(() => AQUA, []);
+
+  const handleNodeClick = useCallback(
+    (node: NodeObject<GraphNode>, event: MouseEvent) => {
+      const typed = node as GraphNode;
+      if (typed.val === 0) return;
+      // Translate viewport coordinates into the graph-stage coordinate space
+      // (the overlay lives inside graph-stage, which is positioned 245px in
+      // from the left of the workspace).
+      const rect = graphContainerRef.current?.getBoundingClientRect();
+      const x = rect ? (event.clientX ?? 0) - rect.left : (event.offsetX ?? 0);
+      const y = rect ? (event.clientY ?? 0) - rect.top : (event.offsetY ?? 0);
+      setSelectedNode((current) =>
+        current && current.id === typed.id ? null : { id: typed.id, x, y },
+      );
+    },
+    [],
+  );
+
+  const handleNodeHover = useCallback((node: NodeObject<GraphNode> | null) => {
+    setHoveredNodeId(node ? (node as GraphNode).id : null);
+  }, []);
+
+  const handleBackgroundClick = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
+
   return <ParticlesProvider init={loadSlim}><main className={`app-shell ${connected ? "is-connected" : ""}`}>
     <Particles id="ambient-network" className="ambient-network" options={particleOptions} />
     {connected && <header className="topbar"><div className="brand"><span className="brand-mark"><Sparkles size={15} /></span><span>agent<span>OS</span></span></div><div className="system-live"><i /> Business graph <span>·</span> assembling</div><button className="ghost-button" onClick={() => setConnected(false)}><Plus size={15} /> Add connection</button></header>}
     {connected && <aside className="connection-rail"><p>PLEASURE PIZZA STACK</p><button className="rail-app"><span className="mini-icon mail">M</span>Gmail</button><button className="rail-app"><span className="mini-icon drive">◆</span>Drive</button><button className="rail-app"><span className="mini-icon docs">D</span>Docs</button><button className="rail-app"><span className="mini-icon sheets">#</span>Sheets</button><button className="rail-app"><span className="mini-icon calendar">▣</span>Calendar</button><div className="rail-divider" /><div className="mcp-card"><span>MCP</span><strong>Ready for Qoder</strong><p>One secure business interface.</p><button>Copy endpoint <ChevronRight size={13} /></button></div></aside>}
     <section className="workspace">
       {connected ? <div className="graph-stage">
-        <div className="graph-heading"><div><p>LIVE ORGANIZATION MAP</p><h1>Your business brain</h1></div><div className="graph-count"><strong>{nonBrainRevealed} / {Math.max(totalPossible - 1, 0)}</strong><span>nodes mapped · {revealedServicesCount} of {onboardingTools.length} services</span></div></div><button className="sync-pill" onClick={() => { void startConnect(); }} disabled={connectBusy}>{connectBusy ? "Syncing…" : "Sync live data"}</button><ReactFlow nodes={visibleNodes} edges={visibleEdges} nodeTypes={nodeTypes} minZoom={0.4} maxZoom={1.2} nodesDraggable nodesConnectable={false} proOptions={{ hideAttribution: true }}><Background color="#d8f3ff" gap={28} size={1} /><Controls showInteractive={false} /></ReactFlow><div className="graph-event"><span className="event-pulse" />{status}</div></div> : <div className="hero-stage"><button className={`launch-blue-orb ${mode}`} onClick={startListening} aria-label="Begin voice setup"><span /><span /></button><button className={`launch-mic ${callActive ? "is-live" : ""}`} onClick={startListening}><Mic size={20} /><span>{callActive ? "End conversation" : "Talk to AgentOS"}</span></button><div className="conversation-panel" ref={transcriptLogRef} role="log" aria-label="Conversation transcript">{transcriptLog.map((entry) => <p className={`conversation-line ${entry.role}`} key={entry.id}><span>{entry.role === "agent" ? "AgentOS" : "You"}</span>{entry.text}</p>)}{transcript !== transcriptLog.at(-1)?.text && <p className={`conversation-line live ${mode === "listening" ? "is-live" : ""}`}><span>{mode === "listening" ? "You" : "AgentOS"}</span>{transcript}</p>}</div></div>}
+        <div className="graph-heading"><div><p>LIVE ORGANIZATION MAP</p><h1>Your business brain</h1></div><div className="graph-count"><strong>{nonBrainRevealed} / {Math.max(totalPossible - 1, 0)}</strong><span>nodes mapped · {revealedServicesCount} of {onboardingTools.length} services</span></div></div><button className="sync-pill" onClick={() => { void startConnect(); }} disabled={connectBusy}>{connectBusy ? "Syncing…" : "Sync live data"}</button>
+        <div ref={graphContainerRef} className="graph-canvas">
+          <ForceGraph2D
+            ref={fgRef}
+            graphData={graphData as unknown as GraphData<GraphNode, GraphLink>}
+            width={graphSize.width}
+            height={graphSize.height}
+            backgroundColor="rgba(0,0,0,0)"
+            nodeRelSize={nodeRelSize}
+            nodeVal={(n) => (n as GraphNode).val}
+            nodeColor={nodeColor}
+            nodeLabel={(n) => {
+              const node = n as GraphNode;
+              if (node.val === 0) return "";
+              return `${node.label}${node.meta ? ` — ${node.meta}` : ""}`;
+            }}
+            linkColor={linkColor}
+            linkWidth={linkWidth}
+            linkDirectionalParticles={linkDirectionalParticles}
+            linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
+            linkDirectionalParticleWidth={linkDirectionalParticleWidth}
+            linkDirectionalParticleColor={linkDirectionalParticleColor}
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.3}
+            cooldownTicks={120}
+            warmupTicks={40}
+            onNodeClick={handleNodeClick}
+            onNodeHover={handleNodeHover}
+            onBackgroundClick={handleBackgroundClick}
+          />
+        </div>
+        {selectedNode && selectedNodeData && (
+          <div
+            className="graph-node-overlay"
+            style={{ left: Math.min(selectedNode.x + 14, graphSize.width - 240), top: Math.min(selectedNode.y + 14, graphSize.height - 130) }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className={`graph-node-overlay-kind kind-${selectedNodeData.kind}`}>{selectedNodeData.kind}</span>
+            <strong>{selectedNodeData.label}</strong>
+            {selectedNodeData.tool && <span className="graph-node-overlay-source">{labelFor[selectedNodeData.tool]}</span>}
+            {selectedNodeData.meta && <span className="graph-node-overlay-meta">{selectedNodeData.meta}</span>}
+          </div>
+        )}
+        <div className="graph-event"><span className="event-pulse" />{status}</div></div> : <div className="hero-stage"><button className={`launch-blue-orb ${mode}`} onClick={startListening} aria-label="Begin voice setup"><span /><span /></button><button className={`launch-mic ${callActive ? "is-live" : ""}`} onClick={startListening}><Mic size={20} /><span>{callActive ? "End conversation" : "Talk to AgentOS"}</span></button><div className="conversation-panel" ref={transcriptLogRef} role="log" aria-label="Conversation transcript">{transcriptLog.map((entry) => <p className={`conversation-line ${entry.role}`} key={entry.id}><span>{entry.role === "agent" ? "AgentOS" : "You"}</span>{entry.text}</p>)}{transcript !== transcriptLog.at(-1)?.text && <p className={`conversation-line live ${mode === "listening" ? "is-live" : ""}`}><span>{mode === "listening" ? "You" : "AgentOS"}</span>{transcript}</p>}</div></div>}
     </section>
     {connected && <section className="voice-console"><div className={`orb-wrap ${mode}`}><div className="orb-ring r1" /><div className="orb-ring r2" /><button className="voice-orb" onClick={startListening} aria-label="Start voice interaction"><span /><span /><span /></button></div><div className="voice-copy"><div className="voice-state">{mode === "listening" ? "Listening" : mode === "thinking" ? "Building context" : mode === "speaking" ? "AgentOS" : "Voice interface"}</div><p>{transcript}</p><div className="voice-actions"><button onClick={startListening}><Mic size={15} /> Ask about Acme</button><button onClick={() => { setMode("speaking"); setTranscript("Your AgentOS voice line is ready for the demo."); }}><Phone size={15} /> Test Vapi line</button>{callActive && <button className="end-call" onClick={endCall}><PhoneOff size={15} /> End conversation</button>}</div></div></section>}
   </main></ParticlesProvider>;
-}
-
-export default function Home() {
-  return (
-    <ReactFlowProvider>
-      <HomeInner />
-    </ReactFlowProvider>
-  );
 }
