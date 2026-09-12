@@ -66,7 +66,7 @@ test("ignores outbound, non-iMessage, group, and wrong-line messages", () => {
 test("removes MiniMax reasoning blocks from customer-facing text", () => {
   assert.equal(
     customerFacingText("<think>Internal chain of thought.</think>\n\nCall us at 831-555-0100."),
-    "call us at 831-555-0100.",
+    "i don't have enough confirmed information to answer that accurately yet.",
   );
   assert.equal(customerFacingText("Answer only."), "answer only.");
   assert.equal(customerFacingText("<think>unfinished reasoning"), "");
@@ -92,17 +92,28 @@ test("sendBlueMessage uses the documented SendBlue request shape", async () => {
 
 test("renders recommendation and price formatting as plain iMessage text", () => {
   assert.equal(
-    customerFacingText("## Try these\n- **The Hook** — pesto and feta\n- **BBQ Chicken** — chicken and BBQ sauce\n\nCall **831-475-4002**. Published price: **$39.00**."),
-    "try these\nthe hook — pesto and feta\nbbq chicken — chicken and bbq sauce\n\ncall 831-475-4002. published price: $39.00.",
+    customerFacingText("## Try these\n- **The Hook** — pesto and feta\n- **BBQ Chicken** — chicken and BBQ sauce\n\nPhone: **831-475-4002**. Published price: **$39.00**."),
+    "try these\nthe hook — pesto and feta\nbbq chicken — chicken and bbq sauce\n\nphone: 831-475-4002. published price: $39.00.",
   );
-  assert.equal(customerFacingText("See https://example.com/menu_for_today and call +1-831-475-4002."),
-    "see https://example.com/menu_for_today and call +1-831-475-4002.");
+  assert.equal(customerFacingText("See https://example.com/menu_for_today. Our number is +1-831-475-4002."),
+    "see https://example.com/menu_for_today. our number is +1-831-475-4002.");
 });
 
 test("lowercases replies without replacing useful summaries with a staff referral", () => {
   assert.equal(customerFacingText("Hi! This Is DOWNTOWN. What's Up?"), "hi! this is downtown. what's up?");
   assert.equal(customerFacingText("Pizza comes whole or by the slice. There's BBQ Chicken. There's Veggie too. Prices can change."),
     "pizza comes whole or by the slice. there's bbq chicken. there's veggie too. prices can change.");
-  assert.equal(customerFacingText("It is $39.00. Call 831-600-7859. Please confirm first."),
-    "it is $39.00. call 831-600-7859. please confirm first.");
+  assert.equal(customerFacingText("It is $39.00. Our number is 831-600-7859. Prices can change."),
+    "it is $39.00. our number is 831-600-7859. prices can change.");
+});
+
+test("removes model-generated business referrals but retains facts and safety cautions", () => {
+  assert.equal(customerFacingText("Whole pies come in two sizes. Slices start at $5.75, so call 831-600-7859 for the full menu."),
+    "whole pies come in two sizes. slices start at $5.75.");
+  assert.equal(customerFacingText("I can't confirm dairy cross-contact or allergy safety, so ask the staff directly."),
+    "i can't confirm dairy cross-contact or allergy safety.");
+  assert.equal(customerFacingText("The ingredients include cheese. You'd need to check with the staff directly."),
+    "the ingredients include cheese.");
+  assert.equal(customerFacingText("The downtown phone number is 831-600-7859."),
+    "the downtown phone number is 831-600-7859.");
 });

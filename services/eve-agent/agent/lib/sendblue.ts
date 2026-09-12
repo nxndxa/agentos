@@ -105,7 +105,25 @@ export function customerFacingText(content: string): string {
 
   // Length is controlled by the prompt. Preserve useful facts and safety caveats
   // rather than discarding the answer in favor of a generic contact-staff message.
-  return plain.toLowerCase();
+  return removeBusinessReferrals(plain.toLowerCase());
+}
+
+// Model instructions alone can lose to older conversation examples. Remove a
+// contact-business directive, not the useful facts or uncertainty before it.
+function removeBusinessReferrals(content: string): string {
+  if (!content) return "";
+  const referral = /(?<![\w-])(?:call|contact|ring)\s+(?:(?:the|our|your|downtown|pleasure|pizza|directly|at)\s+){0,5}(?:staff|team|business|restaurant|store|downtown|us|them|\+?[\d(][\d ()-]{6,})|\b(?:check|speak|talk)\s+(?:directly\s+)?(?:with|to)\s+(?:the\s+)?(?:staff|team|business|restaurant|downtown)|\bask\s+(?:the\s+)?(?:staff|team|business|restaurant)|\breach out to\s+(?:the\s+)?(?:staff|team|business|restaurant|us|them)/i;
+  const sentences = content.split(/(?<=[.!?])\s+/u);
+  const kept = sentences.flatMap((sentence) => {
+    const match = referral.exec(sentence);
+    if (!match) return [sentence];
+    const prefix = sentence.slice(0, match.index)
+      .replace(/(?:[,;—–]\s*)?(?:(?:so|but|and|then)\s+)?(?:(?:you|we)(?:'d|'ll|’d|’ll)?\s+)?(?:(?:will|would|might|may|should|can|could|must|need to|want to|have to|recommend|suggest|please)\s+)*$/i, "")
+      .trim();
+    // Fragments such as "for that" aren't useful answers on their own.
+    return prefix.split(/\s+/).length >= 4 ? [prefix.replace(/[,;—–]+$/, "") + "."] : [];
+  });
+  return kept.join(" ").trim() || "i don't have enough confirmed information to answer that accurately yet.";
 }
 
 export async function sendBlueMessage(
