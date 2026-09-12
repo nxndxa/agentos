@@ -1,0 +1,31 @@
+{
+  "name": "@agentos/pleasure-pizza",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Pleasure Pizza CRM, full-PDF knowledge index, hosted MCP server, and CLI by AgentOS.",
+  "type": "module",
+  "bin": {
+    "pleasure-pizza": "./bin/pleasure-pizza.mjs",
+    "agent": "./bin/agent.mjs"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "test": "node --test",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:mcp": "node scripts/mcp-smoke.mjs",
+    "smoke:crm": "node scripts/mcp-crm-roundtrip.mjs",
+    "seed:crm": "node scripts/seed-demo-customers.mjs",
+    "smoke:voice": "node scripts/voice-agent-smoke.mjs",
+    "smoke:sms": "node scripts/sms-agent-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.6.2"
+  }
+}
