@@ -193,6 +193,19 @@ function HomeInner() {
   useEffect(() => () => {
     revealTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
   }, []);
+  // React Flow fires a benign ResizeObserver warning in dev mode when
+  // the canvas resizes during a frame. Silence it so the error overlay
+  // doesn't trip.
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      if (event.message?.includes("ResizeObserver loop completed with undelivered notifications")) {
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("error", onError);
+    return () => window.removeEventListener("error", onError);
+  }, []);
   const addTranscript = useCallback((role: TranscriptEntry["role"], text: string) => {
     if (!text.trim()) return;
     setTranscriptLog((entries) => {
@@ -407,13 +420,15 @@ function HomeInner() {
     };
 
     try {
-      for (const tool of TOOL_KEYS) {
+      const pendingTools = onboardingToolsRef.current.filter((tool) => {
         const existing = accountsRef.current.find((a) => a.tool === tool);
-        if (existing?.status === "ACTIVE") continue;
+        return existing?.status !== "ACTIVE";
+      });
+      for (const tool of pendingTools) {
         await attemptOAuth(tool);
       }
 
-      const allActive = TOOL_KEYS.every(
+      const allActive = pendingTools.every(
         (k) => accountsRef.current.find((a) => a.tool === k)?.status === "ACTIVE",
       );
       if (allActive) {
@@ -465,29 +480,31 @@ function HomeInner() {
       revealTimeoutsRef.current.push(timeoutId);
     });
 
-    if (oauthCompleteRef.current) {
-      // OAuth already done for an earlier batch — reveal entities for the new services too.
-      const entityStart = serviceStart + newlyAdded.length * serviceStep + 200;
-      newlyAdded.forEach((tool, serviceIndex) => {
-        const seeds = seedData[tool];
-        seeds.forEach((seed, entityIndex) => {
-          const id = `${tool}-${seed.id}`;
-          const timeoutId = window.setTimeout(() => {
-            revealNode(id);
-          }, entityStart + serviceIndex * 160 + entityIndex * 170);
-          revealTimeoutsRef.current.push(timeoutId);
-        });
+    // Always reveal entities from the hard-coded Pleasure Pizza seed
+    // data — no OAuth gate. Real Composio data will replace these once
+    // the Connect flow finishes, but the demo works without it.
+    const entityStart = serviceStart + newlyAdded.length * serviceStep + 200;
+    newlyAdded.forEach((tool, serviceIndex) => {
+      const seeds = seedData[tool];
+      seeds.forEach((seed, entityIndex) => {
+        const id = `${tool}-${seed.id}`;
+        const timeoutId = window.setTimeout(() => {
+          revealNode(id);
+        }, entityStart + serviceIndex * 160 + entityIndex * 170);
+        revealTimeoutsRef.current.push(timeoutId);
       });
+    });
 
-      const totalEntities = newlyAdded.reduce((sum, t) => sum + seedData[t].length, 0);
-      const finalDelay = entityStart + newlyAdded.length * 160 + totalEntities * 170 + 350;
-      const finalId = window.setTimeout(() => {
-        setMode("speaking");
-        setTranscript(`I connected ${merged.map((t) => toolCatalog[t].data.label).join(", ")}. Pulled recent activity from each — your business brain is ready to grow.`);
-        setStatus("Business graph ready");
-      }, finalDelay);
-      revealTimeoutsRef.current.push(finalId);
-    }
+    const totalEntities = newlyAdded.reduce((sum, t) => sum + seedData[t].length, 0);
+    const finalDelay = entityStart + newlyAdded.length * 160 + totalEntities * 170 + 350;
+    const finalId = window.setTimeout(() => {
+      setMode("speaking");
+      setTranscript(
+        `I mapped ${merged.map((t) => toolCatalog[t].data.label).join(", ")}. Pleasure Pizza's brain has ${totalEntities} known touchpoints and is ready to grow.`,
+      );
+      setStatus("Business graph ready");
+    }, finalDelay);
+    revealTimeoutsRef.current.push(finalId);
   }, [revealNode]);
   useEffect(() => {
     const publicKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
@@ -580,7 +597,7 @@ function HomeInner() {
     for (const a of accounts) if (a.status === "ACTIVE") set.add(a.tool);
     return set;
   }, [accounts]);
-  const allConnected = activeAccountIds.size >= TOOL_KEYS.length;
+  const allConnected = activeAccountIds.size >= onboardingTools.length && onboardingTools.length > 0;
   const totalPossible = useMemo(
     () => 1 + onboardingTools.length + onboardingTools.reduce((sum, t) => sum + seedData[t].length, 0),
     [onboardingTools],
@@ -651,46 +668,7 @@ function HomeInner() {
     {connected && <aside className="connection-rail"><p>PLEASURE PIZZA STACK</p><button className="rail-app"><span className="mini-icon mail">M</span>Gmail</button><button className="rail-app"><span className="mini-icon drive">◆</span>Drive</button><button className="rail-app"><span className="mini-icon docs">D</span>Docs</button><button className="rail-app"><span className="mini-icon sheets">#</span>Sheets</button><button className="rail-app"><span className="mini-icon calendar">▣</span>Calendar</button><div className="rail-divider" /><div className="mcp-card"><span>MCP</span><strong>Ready for Qoder</strong><p>One secure business interface.</p><button>Copy endpoint <ChevronRight size={13} /></button></div></aside>}
     <section className="workspace">
       {connected ? <div className="graph-stage">
-        {!allConnected && (
-          <div className="connect-panel">
-            <p className="connect-eyebrow">PLEASURE PIZZA STACK</p>
-            <h2>Connect your Google services</h2>
-            <ul className="connect-list">
-              {TOOL_KEYS.map((k) => {
-                const account = accounts.find((a) => a.tool === k);
-                const isActive = account?.status === "ACTIVE";
-                const isPending = account?.status === "PENDING";
-                const isFailed = account?.status === "FAILED";
-                return (
-                  <li key={k} className={`${isActive ? "is-on" : ""} ${isFailed ? "is-failed" : ""}`}>
-                    <span className={`mini-icon ${iconClassFor[k]}`}>{iconFor[k]}</span>
-                    <span className="connect-label">{labelFor[k]}</span>
-                    <CheckIcon filled={isActive} pending={isPending} />
-                  </li>
-                );
-              })}
-            </ul>
-            <button
-              className="connect-primary"
-              onClick={() => { void startConnect(); }}
-              disabled={connectBusy}
-            >
-              {connectBusy ? (
-                <>
-                  <span className="connect-spinner" />
-                  Connecting…
-                </>
-              ) : accounts.some((a) => a.status === "FAILED") ? (
-                "Retry failed connections"
-              ) : (
-                "Connect Pleasure Pizza stack"
-              )}
-            </button>
-            {connectError && <p className="connect-error">{connectError}</p>}
-            <p className="connect-hint">One Google sign-in. We'll pull the latest activity from each.</p>
-          </div>
-        )}
-        <div className="graph-heading"><div><p>LIVE ORGANIZATION MAP</p><h1>Your business brain</h1></div><div className="graph-count"><strong>{nonBrainRevealed} / {Math.max(totalPossible - 1, 0)}</strong><span>nodes mapped · {revealedServicesCount} of {onboardingTools.length} services</span></div></div><ReactFlow nodes={visibleNodes} edges={visibleEdges} nodeTypes={nodeTypes} minZoom={0.4} maxZoom={1.2} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} proOptions={{ hideAttribution: true }}><Background color="#d8f3ff" gap={28} size={1} /><Controls showInteractive={false} /></ReactFlow><div className="graph-event"><span className="event-pulse" />{status}</div></div> : <div className="hero-stage"><button className={`launch-blue-orb ${mode}`} onClick={startListening} aria-label="Begin voice setup"><span /><span /></button><button className={`launch-mic ${callActive ? "is-live" : ""}`} onClick={startListening}><Mic size={20} /><span>{callActive ? "End conversation" : "Talk to AgentOS"}</span></button><div className="conversation-panel" ref={transcriptLogRef} role="log" aria-label="Conversation transcript">{transcriptLog.map((entry) => <p className={`conversation-line ${entry.role}`} key={entry.id}><span>{entry.role === "agent" ? "AgentOS" : "You"}</span>{entry.text}</p>)}{transcript !== transcriptLog.at(-1)?.text && <p className={`conversation-line live ${mode === "listening" ? "is-live" : ""}`}><span>{mode === "listening" ? "You" : "AgentOS"}</span>{transcript}</p>}</div></div>}
+        <div className="graph-heading"><div><p>LIVE ORGANIZATION MAP</p><h1>Your business brain</h1></div><div className="graph-count"><strong>{nonBrainRevealed} / {Math.max(totalPossible - 1, 0)}</strong><span>nodes mapped · {revealedServicesCount} of {onboardingTools.length} services</span></div></div><button className="sync-pill" onClick={() => { void startConnect(); }} disabled={connectBusy}>{connectBusy ? "Syncing…" : "Sync live data"}</button><ReactFlow nodes={visibleNodes} edges={visibleEdges} nodeTypes={nodeTypes} minZoom={0.4} maxZoom={1.2} nodesDraggable nodesConnectable={false} proOptions={{ hideAttribution: true }}><Background color="#d8f3ff" gap={28} size={1} /><Controls showInteractive={false} /></ReactFlow><div className="graph-event"><span className="event-pulse" />{status}</div></div> : <div className="hero-stage"><button className={`launch-blue-orb ${mode}`} onClick={startListening} aria-label="Begin voice setup"><span /><span /></button><button className={`launch-mic ${callActive ? "is-live" : ""}`} onClick={startListening}><Mic size={20} /><span>{callActive ? "End conversation" : "Talk to AgentOS"}</span></button><div className="conversation-panel" ref={transcriptLogRef} role="log" aria-label="Conversation transcript">{transcriptLog.map((entry) => <p className={`conversation-line ${entry.role}`} key={entry.id}><span>{entry.role === "agent" ? "AgentOS" : "You"}</span>{entry.text}</p>)}{transcript !== transcriptLog.at(-1)?.text && <p className={`conversation-line live ${mode === "listening" ? "is-live" : ""}`}><span>{mode === "listening" ? "You" : "AgentOS"}</span>{transcript}</p>}</div></div>}
     </section>
     {connected && <section className="voice-console"><div className={`orb-wrap ${mode}`}><div className="orb-ring r1" /><div className="orb-ring r2" /><button className="voice-orb" onClick={startListening} aria-label="Start voice interaction"><span /><span /><span /></button></div><div className="voice-copy"><div className="voice-state">{mode === "listening" ? "Listening" : mode === "thinking" ? "Building context" : mode === "speaking" ? "AgentOS" : "Voice interface"}</div><p>{transcript}</p><div className="voice-actions"><button onClick={startListening}><Mic size={15} /> Ask about Acme</button><button onClick={() => { setMode("speaking"); setTranscript("Your AgentOS voice line is ready for the demo."); }}><Phone size={15} /> Test Vapi line</button>{callActive && <button className="end-call" onClick={endCall}><PhoneOff size={15} /> End conversation</button>}</div></div></section>}
   </main></ParticlesProvider>;
