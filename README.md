@@ -85,6 +85,8 @@ Every operation is audit-logged with the calling agent's identity.
 
 ## Repository layout
 
+The separate [Pleasure Pizza Eve service](services/eve-agent/README.md) connects MiniMax reasoning, the existing restaurant knowledge API, and SendBlue iMessage on Railway. Its README covers the architecture, configuration, deployment, and verification limits.
+
 ```
 cli/
 ├── commands/     # init, ask, customer, connect — thin CLI surface

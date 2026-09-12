@@ -1,0 +1,26 @@
+{
+  "name": "@agentos/pleasure-pizza-eve-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "eve dev --no-ui",
+    "build": "eve build",
+    "start": "eve start --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "latest",
+    "ai": "latest",
+    "eve": "0.47.3",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "latest"
+  }
+}
