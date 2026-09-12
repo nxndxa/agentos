@@ -60,6 +60,17 @@ const lightenHex = (hex: string, amount: number): string => {
   const toHex = (n: number) => n.toString(16).padStart(2, "0");
   return `#${toHex(lerp(r))}${toHex(lerp(g))}${toHex(lerp(b))}`;
 };
+
+// Convert a hex color to rgba() with the given alpha. Used for halos that
+// need to fade out at the edge.
+const hexToRgba = (hex: string, alpha: number): string => {
+  const m = hex.replace("#", "");
+  if (m.length !== 6) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+};
 const BRAIN_ID = "brain";
 const AQUA = "#72f5df";
 const LINK_COLOR_HIDDEN = "rgba(0,0,0,0)";
@@ -641,7 +652,7 @@ export default function Home() {
     calendar: "▣",
   };
 
-  // Custom node drawing — gradient-filled circles, glow halo on the brain,
+  // Custom node drawing — gradient-filled circles with canvas-shadow bloom,
   // service-icon glyphs inside service nodes, smooth scale-up on hover.
   const nodeCanvasObject = useCallback(
     (raw: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D) => {
@@ -650,45 +661,50 @@ export default function Home() {
       const baseRadius = nodeRelSize * Math.sqrt(node.val / Math.PI);
       const isHovered = hoveredNodeId === node.id;
       const dimmed = !!hoverNeighbors && !hoverNeighbors.has(node.id);
-      const r = baseRadius * (isHovered ? 1.18 : 1);
+      const r = baseRadius * (isHovered ? 1.2 : 1);
       ctx.save();
+      if (dimmed) ctx.globalAlpha = 0.18;
 
-      if (dimmed) ctx.globalAlpha = 0.22;
+      // Outer halo — bloom-style, gives each node a glowing falloff.
+      const haloRadius = r * (node.kind === "brain" ? 4.5 : node.kind === "service" ? 2.6 : 1.9);
+      const halo = ctx.createRadialGradient(node.x, node.y, r * 0.7, node.x, node.y, haloRadius);
+      halo.addColorStop(0, hexToRgba(node.color, 0.55));
+      halo.addColorStop(0.55, hexToRgba(node.color, 0.18));
+      halo.addColorStop(1, hexToRgba(node.color, 0));
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Brain gets an extra soft halo so it reads as the focal point.
-      if (node.kind === "brain") {
-        const halo = ctx.createRadialGradient(node.x, node.y, r * 0.6, node.x, node.y, r * 2.1);
-        halo.addColorStop(0, "rgba(114,245,223,0.55)");
-        halo.addColorStop(0.6, "rgba(114,245,223,0.18)");
-        halo.addColorStop(1, "rgba(114,245,223,0)");
-        ctx.fillStyle = halo;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r * 2.1, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Canvas shadow blur — gives the body a soft bloom against the navy bg.
+      ctx.shadowBlur = node.kind === "brain" ? 22 : node.kind === "service" ? 12 : 6;
+      ctx.shadowColor = node.color;
 
       // Radial gradient body — brighter at the top-left, deeper at the bottom-right.
       const grad = ctx.createRadialGradient(
-        node.x - r * 0.35,
-        node.y - r * 0.35,
-        r * 0.15,
+        node.x - r * 0.4,
+        node.y - r * 0.4,
+        r * 0.1,
         node.x,
         node.y,
         r,
       );
-      grad.addColorStop(0, lightenHex(node.color, 0.35));
+      grad.addColorStop(0, lightenHex(node.color, 0.45));
       grad.addColorStop(1, node.color);
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
       ctx.fill();
 
+      // Reset shadow before drawing the glyph / stroke so they stay crisp.
+      ctx.shadowBlur = 0;
+
       // Soft outer ring on services + brain for a "premium" feel.
       if (node.kind !== "entity") {
-        ctx.strokeStyle = isHovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)";
-        ctx.lineWidth = isHovered ? 1.6 : 1;
+        ctx.strokeStyle = isHovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.28)";
+        ctx.lineWidth = isHovered ? 1.4 : 0.9;
         ctx.beginPath();
-        ctx.arc(node.x, node.y, r + 1.2, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, r + 0.8, 0, Math.PI * 2);
         ctx.stroke();
       }
 
@@ -697,10 +713,10 @@ export default function Home() {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (node.kind === "brain") {
-        ctx.font = `600 ${Math.round(r * 0.85)}px ui-sans-serif, system-ui`;
+        ctx.font = `600 ${Math.round(r * 0.95)}px ui-sans-serif, system-ui`;
         ctx.fillText("✦", node.x, node.y + 1);
       } else if (node.kind === "service" && node.tool) {
-        ctx.font = `800 ${Math.round(r * 0.7)}px ui-monospace, monospace`;
+        ctx.font = `800 ${Math.round(r * 0.78)}px ui-monospace, monospace`;
         ctx.fillText(serviceIconFor[node.tool], node.x, node.y + 1);
       }
 
@@ -728,11 +744,11 @@ export default function Home() {
     (raw: LinkObject<GraphNode, GraphLink>) => {
       const link = raw as GraphLink;
       if (!link.revealed) return LINK_COLOR_HIDDEN;
-      if (!hoverNeighbors) return LINK_COLOR;
+      if (!hoverNeighbors) return "rgba(80,140,200,0.22)";
       const sourceId = typeof link.source === "string" ? link.source : (link.source as { id?: string })?.id ?? "";
       const targetId = typeof link.target === "string" ? link.target : (link.target as { id?: string })?.id ?? "";
       const inSet = hoverNeighbors.has(sourceId) || hoverNeighbors.has(targetId);
-      return inSet ? LINK_COLOR : "rgba(49,152,255,0.12)";
+      return inSet ? "rgba(114,245,223,0.55)" : "rgba(80,140,200,0.10)";
     },
     [hoverNeighbors],
   );
@@ -755,14 +771,14 @@ export default function Home() {
       const link = raw as GraphLink;
       if (!link.revealed) return 0;
       // Slightly more particles on brain↔service links to highlight them.
-      return link.target === BRAIN_ID || link.source === BRAIN_ID ? 2 : 1;
+      return link.target === BRAIN_ID || link.source === BRAIN_ID ? 3 : 2;
     },
     [],
   );
 
-  const linkDirectionalParticleSpeed = useCallback(() => 0.006, []);
-  const linkDirectionalParticleWidth = useCallback(() => 1.6, []);
-  const linkDirectionalParticleColor = useCallback(() => AQUA, []);
+  const linkDirectionalParticleSpeed = useCallback(() => 0.009, []);
+  const linkDirectionalParticleWidth = useCallback(() => 1.8, []);
+  const linkDirectionalParticleColor = useCallback(() => "#9ef9ea", []);
 
   const handleNodeClick = useCallback(
     (node: NodeObject<GraphNode>, event: MouseEvent) => {
@@ -820,10 +836,10 @@ export default function Home() {
             linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
             linkDirectionalParticleWidth={linkDirectionalParticleWidth}
             linkDirectionalParticleColor={linkDirectionalParticleColor}
-            d3AlphaDecay={0.025}
-            d3VelocityDecay={0.4}
-            cooldownTicks={100}
-            warmupTicks={30}
+            d3AlphaDecay={0.015}
+            d3VelocityDecay={0.45}
+            cooldownTicks={0}
+            warmupTicks={40}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
             onBackgroundClick={handleBackgroundClick}
