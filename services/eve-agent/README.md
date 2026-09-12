@@ -26,9 +26,9 @@ Railway's official MCP was also registered in the operator's local Codex configu
    | `search_menu` | `POST /api/menu` | Search published menu information |
    | `route_to_staff` | `POST /api/escalate` | Return staff contact guidance; does not contact staff |
 
-5. On a completed assistant reply, the channel strips MiniMax `<think>` blocks and posts the visible text to SendBlue's `/api/send-message` endpoint. Text emitted alongside tool calls is not delivered. Failed turns attempt a short fallback reply.
+5. On a completed assistant reply, the channel strips MiniMax `<think>` blocks and Markdown formatting, then posts plain text to SendBlue's `/api/send-message` endpoint. Text emitted alongside tool calls is not delivered. Failed turns attempt a short fallback reply.
 
-The prompt requires location clarification where relevant and cautions against guaranteeing live prices, hours, order status, or allergen safety. Eve's default shell, file, web, and delegation tools are explicitly disabled. This service exposes no CRM editing tools.
+The prompt asks for natural, usually one- or two-sentence replies without canned introductions, unsolicited emoji, or lists. It requires location clarification where relevant and cautions against guaranteeing live prices, hours, order status, or allergen safety. Eve's default shell, file, web, and delegation tools are explicitly disabled. This service exposes no CRM editing tools.
 
 ## Configuration and local use
 
@@ -75,9 +75,9 @@ An initial deploy failed with `EXDEV` when Eve tried to rename an uploaded local
 
 ## Verification and remaining limits
 
-The implementation passed six helper tests, TypeScript checking, and an Eve production build. A local Eve invocation using the configured MiniMax credentials successfully retrieved a restaurant phone number through the live knowledge service. Railway health probes passed, an unsigned webhook returned 401, and a signed ignored event returned 200. The signed SendBlue receive webhook was registered and read back successfully.
+The implementation passed seven helper tests, TypeScript checking, and an Eve production build. A local Eve invocation using the configured MiniMax credentials successfully retrieved a restaurant phone number through the live knowledge service. Railway health probes passed, an unsigned webhook returned 401, and a signed ignored event returned 200. The signed SendBlue receive webhook was registered and read back successfully.
 
-A real inbound-to-outbound iMessage conversation has **not** been tested. SendBlue shared lines may require the sender to be a verified contact. Attachments and group conversations are not supported. The inbound service allowlist does not itself enforce SendBlue's outbound SMS fallback policy.
+A real inbound-to-outbound iMessage exchange was verified after registering the owner's test number and completing SendBlue contact verification. SendBlue reported the agent's replies as delivered over iMessage, and the owner confirmed receipt. A restaurant lookup through the deployed webhook also produced a delivered phone-number answer. SendBlue shared lines require the sender to be a verified contact. Attachments and group conversations are not supported. The inbound service allowlist does not itself enforce SendBlue's outbound SMS fallback policy.
 
 This initial integration does not implement webhook deduplication, an application delivery ledger, or a durable inbox. It acknowledges accepted webhooks before the background session send completes, so failures at that boundary can lose a message, and provider retries can duplicate replies. Add durable ingestion and delivery reconciliation before relying on exactly-once processing. HTTP calls also have no explicit application timeout or retry policy, and an HTTP success from SendBlue is not proof of delivery. Conversation state contains customer messages and phone numbers; manage access and retention accordingly.
 

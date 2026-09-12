@@ -79,7 +79,7 @@ test("sendBlueMessage uses the documented SendBlue request shape", async () => {
     return Response.json({ status: "QUEUED" });
   };
 
-  await sendBlueMessage("+15550000000", "Hi!", { env, fetchImpl });
+  await sendBlueMessage("+15550000000", "**Hi!**", { env, fetchImpl });
   assert.equal(request?.url, "https://api.sendblue.com/api/send-message");
   assert.equal(request?.headers.get("sb-api-key-id"), "key");
   assert.equal(request?.headers.get("sb-api-secret-key"), "secret");
@@ -88,4 +88,13 @@ test("sendBlueMessage uses the documented SendBlue request shape", async () => {
     from_number: "+13470000000",
     content: "Hi!",
   });
+});
+
+test("renders recommendation and price formatting as plain iMessage text", () => {
+  assert.equal(
+    customerFacingText("## Try these\n- **The Hook** — pesto and feta\n- **BBQ Chicken** — chicken and BBQ sauce\n\nCall **831-475-4002**. Published price: **$39.00**."),
+    "Try these\nThe Hook — pesto and feta\nBBQ Chicken — chicken and BBQ sauce\n\nCall 831-475-4002. Published price: $39.00.",
+  );
+  assert.equal(customerFacingText("See https://example.com/menu_for_today and call +1-831-475-4002."),
+    "See https://example.com/menu_for_today and call +1-831-475-4002.");
 });
