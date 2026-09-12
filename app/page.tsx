@@ -157,7 +157,25 @@ function CheckIcon({ filled, pending }: { filled: boolean; pending: boolean }) {
 }
 const nodeTypes = { service: ServiceNode, entity: EntityNode, brain: BrainNode, brainRing: BrainRingNode };
 
+function PublicLanding() {
+  return (
+    <main className="public-landing">
+      <div className="public-brand"><span><Sparkles size={16} /></span>agentOS</div>
+      <a className="public-signin" href="/auth">Sign in</a>
+      <section className="public-center">
+        <p className="public-kicker">ONE COMPANY · ONE CLI · ANY AGENT</p>
+        <div className="public-orb" aria-hidden="true"><i /><i /><i /></div>
+        <h1>Your business,<br /><em>understood.</em></h1>
+        <p>AgentOS connects the systems your company already runs on, giving every person and AI agent shared business context.</p>
+        <a className="public-cta" href="/auth">Create your workspace <ChevronRight size={17} /></a>
+      </section>
+      <p className="public-footnote">Secure connections · Shared context · Agent-ready</p>
+    </main>
+  );
+}
+
 function HomeInner() {
+  const [signedIn, setSignedIn] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
   const [callActive, setCallActive] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -184,6 +202,9 @@ function HomeInner() {
   const populateEntitiesRef = useRef(false);
   const accountsRef = useRef<AccountState[]>([]);
   const reactFlow = useReactFlow();
+  useEffect(() => {
+    setSignedIn(window.localStorage.getItem("agentos-demo-session") === "true");
+  }, []);
   useEffect(() => {
     onboardingToolsRef.current = onboardingTools;
   }, [onboardingTools]);
@@ -645,6 +666,7 @@ function HomeInner() {
       });
     });
   });
+  if (!signedIn) return <PublicLanding />;
   return <ParticlesProvider init={loadSlim}><main className={`app-shell ${connected ? "is-connected" : ""}`}>
     <Particles id="ambient-network" className="ambient-network" options={particleOptions} />
     {connected && <header className="topbar"><div className="brand"><span className="brand-mark"><Sparkles size={15} /></span><span>agent<span>OS</span></span></div><div className="system-live"><i /> Business graph <span>·</span> assembling</div><button className="ghost-button" onClick={() => setConnected(false)}><Plus size={15} /> Add connection</button></header>}
