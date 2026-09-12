@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 export default function AuthPage() {
@@ -9,12 +9,12 @@ export default function AuthPage() {
   const [submitted, setSubmitted] = useState(false);
   const isSignup = mode === "signup";
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function completeSignIn() {
     window.localStorage.setItem("agentos-demo-session", "true");
     setSubmitted(true);
     window.setTimeout(() => window.location.assign("/"), 350);
   }
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); completeSignIn(); }
   function switchMode(next: "signin" | "signup") { setMode(next); setSubmitted(false); }
 
   return <main className={`auth-blue-shell ${isSignup ? "is-signup" : "is-signin"}`}>
@@ -26,13 +26,15 @@ export default function AuthPage() {
       <h1>Everything your agent needs, connected in one place.</h1>
     </section>
     <section className="auth-blue-card" aria-labelledby="auth-title">
-      <div className="auth-tabs" role="tablist" aria-label="Account action"><button className={!isSignup ? "active" : ""} onClick={() => switchMode("signin")} role="tab" aria-selected={!isSignup}>Sign in</button><button className={isSignup ? "active" : ""} onClick={() => switchMode("signup")} role="tab" aria-selected={isSignup}>Create account</button></div>
-      <div className="auth-card-heading"><h2 id="auth-title">{isSignup ? "Create account" : "Sign in"}</h2></div>
+      <div className="auth-card-heading"><h2 id="auth-title">{isSignup ? "Create an account" : "Welcome back"}</h2><p>{isSignup ? "Start building your business brain." : "Sign in to your workspace."}</p></div>
+      <div className="auth-tabs" role="tablist" aria-label="Account action"><button className={isSignup ? "active" : ""} onClick={() => switchMode("signup")} role="tab" aria-selected={isSignup}>Sign up</button><button className={!isSignup ? "active" : ""} onClick={() => switchMode("signin")} role="tab" aria-selected={!isSignup}>Log in</button></div>
       <form onSubmit={submit}>
-        {isSignup && <><label className="sr-only" htmlFor="name">Full name</label><input id="name" name="name" autoComplete="name" placeholder="Full name" required /></>}
-        <label className="sr-only" htmlFor="email">Email address</label><div className="auth-input"><Mail size={16} /><input id="email" name="email" type="email" autoComplete="email" placeholder="Email address" required /></div>
-        <label className="sr-only" htmlFor="password">Password</label><div className="auth-input"><LockKeyhole size={16} /><input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete={isSignup ? "new-password" : "current-password"} placeholder="Password" minLength={8} required /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
-        <button className="auth-blue-submit" type="submit">{isSignup ? "Create workspace" : "Sign in"} <ArrowRight size={17} /></button>
+        {isSignup && <label>Full name<input id="name" name="name" autoComplete="name" placeholder="Enter your name" required /></label>}
+        <label>Email<input id="email" name="email" type="email" autoComplete="email" placeholder="Enter your email" required /></label>
+        <label>Password<div className="auth-input"><input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete={isSignup ? "new-password" : "current-password"} placeholder={isSignup ? "Create a password" : "Enter your password"} minLength={8} required /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div></label>
+        {isSignup && <div className="auth-requirements"><span><Check size={14} /> At least 8 characters</span><span><Check size={14} /> One special character</span></div>}
+        <button className="auth-blue-submit" type="submit">{isSignup ? "Get started" : "Log in"} <ArrowRight size={17} /></button>
+        <button className="auth-google" type="button" onClick={completeSignIn}><b>G</b>{isSignup ? "Sign up with Google" : "Continue with Google"}</button>
         {submitted && <p className="auth-demo-message">You&apos;re signed in. Opening your workspace…</p>}
       </form>
     </section>
